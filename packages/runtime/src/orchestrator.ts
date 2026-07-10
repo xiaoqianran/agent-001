@@ -365,7 +365,7 @@ export class TickOrchestrator {
           dueTick:
             typeof proposal.structured.args?.dueTick === "number"
               ? proposal.structured.args.dueTick
-              : tick + 72,
+              : tick + 120,
           promiseId: e.promiseId,
         });
         this.applyMemoryHints(memoryHints, tick);

@@ -119,6 +119,7 @@ export class WorldAuthority {
       entitiesHere,
       agentsHere,
       resourcePools,
+      selfInventory: { ...agent.inventory },
     };
   }
 

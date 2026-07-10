@@ -104,14 +104,31 @@ export class RuleCognitiveEngine {
 
     const foodHere = obs.resourcePools.find((p) => p.kind === "food" && p.quantity > 0);
     const othersHere = obs.agentsHere.filter((a) => a.id !== input.agentId);
-    const invFood = 0; // inventory not in observation; runtime may encode in social goals
+    const inv = obs.selfInventory ?? {};
 
-    // Fulfill pending promise: get food then give
+    // Fulfill pending promise: only give when inventory sufficient; else take/move first
     const myPromise = social?.pendingPromisesAsPromisor[0];
     if (myPromise) {
+      const itemKind = myPromise.itemKind ?? "food";
+      const qty = myPromise.quantity ?? 1;
+      const have = inv[itemKind] ?? 0;
+      const canGive = have >= qty;
       const targetHere = othersHere.some((a) => a.id === myPromise.to);
-      // Prefer take food if pool here
-      if (foodHere) {
+
+      if (canGive && targetHere) {
+        // Highest priority: deliver when we hold the item and promisee is here
+        add(
+          {
+            verb: "give",
+            targetAgentId: myPromise.to,
+            itemKind,
+            quantity: qty,
+            mutexSlots: ["manual"],
+          },
+          0.99,
+        );
+      } else if (!canGive && foodHere) {
+        // Acquire before giving — must outrank any give option
         add(
           {
             verb: "take",
@@ -119,9 +136,10 @@ export class RuleCognitiveEngine {
             quantity: 1,
             mutexSlots: ["manual"],
           },
-          0.95,
+          0.97,
         );
-      } else {
+      } else if (!canGive) {
+        // Move to food sources
         for (const t of ["storehouse", "woods", "cabin"]) {
           if (obs.place.adjacent.includes(t)) {
             add(
@@ -130,25 +148,12 @@ export class RuleCognitiveEngine {
                 targetPlaceId: t,
                 mutexSlots: ["locomotion"],
               },
-              0.88 + (t === "storehouse" ? 0.05 : 0),
+              0.93 + (t === "storehouse" ? 0.03 : 0),
             );
           }
         }
-      }
-      // If we might have food (heuristic: after take or work), try give when co-located
-      if (targetHere) {
-        add(
-          {
-            verb: "give",
-            targetAgentId: myPromise.to,
-            itemKind: myPromise.itemKind ?? "food",
-            quantity: myPromise.quantity ?? 1,
-            mutexSlots: ["manual"],
-          },
-          0.99,
-        );
-      } else {
-        // move toward last known - try cabin first as meeting place
+      } else if (canGive && !targetHere) {
+        // Have item, seek promisee — prefer cabin as meeting place
         for (const t of obs.place.adjacent) {
           add(
             {
@@ -156,7 +161,7 @@ export class RuleCognitiveEngine {
               targetPlaceId: t,
               mutexSlots: ["locomotion"],
             },
-            0.7,
+            0.91 + (t === "cabin" ? 0.04 : 0),
           );
         }
       }
@@ -178,7 +183,8 @@ export class RuleCognitiveEngine {
           args: {
             intent: "promise",
             promiseContent: "I will give you food soon",
-            dueTick: input.clock.tick + 48,
+            // Enough ticks to take food and return (several days of hours)
+            dueTick: input.clock.tick + 100,
           },
         },
         this.roleHint === "promisor" ? 0.92 : 0.35,
@@ -255,18 +261,32 @@ export class RuleCognitiveEngine {
 
     add({ verb: "observe", mutexSlots: ["observe"] }, 0.15);
 
-    // Boost options that align with retrieved promise memories
+    // Boost options that align with retrieved promise memories (never promote invalid give)
     for (const m of memories) {
       if (m.tags.includes("promise-class") && m.summary.includes("promised")) {
         for (const o of options) {
-          if (o.action.verb === "give" || o.action.verb === "take") {
+          if (o.action.verb === "take") o.score += 0.05;
+          if (
+            o.action.verb === "give" &&
+            (inv[o.action.itemKind ?? "food"] ?? 0) >= (o.action.quantity ?? 1)
+          ) {
             o.score += 0.05;
           }
         }
       }
     }
 
-    void invFood;
+    // Strip any give options that still exceed inventory (safety net)
+    for (const o of options) {
+      if (o.action.verb === "give") {
+        const need = o.action.quantity ?? 1;
+        const kind = o.action.itemKind ?? "food";
+        if ((inv[kind] ?? 0) < need) {
+          o.score = -1;
+          o.rejectReason = "insufficient_inventory";
+        }
+      }
+    }
 
     let utterance: string | undefined;
     let tokensUsed = 0;
@@ -292,10 +312,10 @@ export class RuleCognitiveEngine {
     }
 
     options.sort((a, b) => b.score - a.score);
-    const best = options[0];
+    const best = options.find((o) => o.score >= 0) ?? options[0];
     const actionId = `act-${input.agentId}-${input.clock.tick}`;
     let action: ActionProposal | undefined;
-    if (best) {
+    if (best && best.score >= 0) {
       const u =
         best.action.verb === "speak"
           ? utterance ??

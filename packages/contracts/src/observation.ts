@@ -31,4 +31,9 @@ export interface LocalObservation {
   agentsHere: AgentView[];
   /** Resources visible at this place (pools) */
   resourcePools: Array<{ id: EntityId; kind: string; quantity: number }>;
+  /**
+   * Observer's own inventory (not other agents').
+   * Required so cognition can gate give vs take without World write access.
+   */
+  selfInventory: Record<string, number>;
 }
