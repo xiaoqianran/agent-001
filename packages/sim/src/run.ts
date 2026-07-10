@@ -7,12 +7,24 @@ import { computeFingerprint } from "@gss/runtime";
 import {
   computeRunMetrics,
   compareParams,
+  createBundle,
+  validateBundle,
+  inspectBundleSummary,
   type ExperimentParams,
   type RunMetrics,
+  type DailyMetricSample,
+  type GssBundleV1,
   parseParamPairs,
   mergeParams,
 } from "@gss/experiment";
 import { createSimulation, type ScenarioId } from "./create.js";
+
+const SCENARIOS: ScenarioId[] = [
+  "solo-cabin",
+  "dyad-cabin",
+  "trio-cabin",
+  "commons-cabin",
+];
 
 export interface RunOptions {
   scenario: string;
@@ -23,9 +35,13 @@ export interface RunOptions {
   metricsOut?: string;
   storehouseFood?: number;
   woodsFood?: number;
+  initialGranary?: number;
+  freeRiderCount?: number;
   label?: string;
   testNormThresholds?: boolean;
   experimentParams?: ExperimentParams;
+  /** sample metrics at day boundaries for bundle */
+  sampleDaily?: boolean;
 }
 
 export interface RunSummary {
@@ -42,6 +58,7 @@ export interface RunSummary {
   memoryCount: number;
   emergentNormCount: number;
   metrics?: RunMetrics;
+  dailyMetrics?: DailyMetricSample[];
   experimentParams?: Record<string, unknown>;
   checkpointPath?: string;
   logPath?: string;
@@ -50,13 +67,55 @@ export interface RunSummary {
   placeId: string;
 }
 
+function cognitionFactoryFor(
+  scenarioId: string,
+  freeRiderCount?: number,
+): ((id: string) => RuleCognitiveEngine) | undefined {
+  if (scenarioId === "dyad-cabin") {
+    return (id) =>
+      new RuleCognitiveEngine({
+        roleHint: id === "agent-alice" ? "promisor" : "promisee",
+      });
+  }
+  if (scenarioId === "trio-cabin") {
+    return (id) =>
+      new RuleCognitiveEngine({
+        roleHint:
+          id === "agent-alice"
+            ? "cooperative"
+            : id === "agent-bob"
+              ? "grabber"
+              : "neutral",
+      });
+  }
+  if (scenarioId === "commons-cabin") {
+    const freeN = freeRiderCount ?? 1;
+    return (id) => {
+      let role: "cooperative" | "free_rider" | "neutral" = "neutral";
+      if (id === "agent-alice") role = "cooperative";
+      else if (id === "agent-bob") role = freeN >= 1 ? "free_rider" : "cooperative";
+      else if (id === "agent-carol") role = freeN >= 2 ? "free_rider" : "neutral";
+      return new RuleCognitiveEngine({ roleHint: role });
+    };
+  }
+  return undefined;
+}
+
+function sampleDay(orch: TickOrchestrator, params: ExperimentParams): DailyMetricSample {
+  const m = computeRunMetrics(orch, params);
+  return {
+    day: m.meta.finalDay,
+    totalFood: m.totals.totalFood,
+    publicStock: m.publicGoods.publicStock,
+    meanHunger: m.wellbeing.meanHunger,
+    contributeOk: m.actions.contributeOk,
+    withdrawPublicOk: m.actions.withdrawPublicOk,
+  };
+}
+
 export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
   const scenario = opts.scenario as ScenarioId;
-  if (
-    scenario !== "solo-cabin" &&
-    scenario !== "dyad-cabin" &&
-    scenario !== "trio-cabin"
-  ) {
+  if (!SCENARIOS.includes(scenario)) {
     throw new Error(`unsupported scenario: ${opts.scenario}`);
   }
 
@@ -66,6 +125,8 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
     days: opts.days,
     storehouseFood: opts.storehouseFood,
     woodsFood: opts.woodsFood,
+    initialGranary: opts.initialGranary,
+    freeRiderCount: opts.freeRiderCount,
     label: opts.label,
     testNormThresholds: opts.testNormThresholds,
   };
@@ -75,15 +136,23 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
     scenario: params.scenario,
     storehouseFood: params.storehouseFood,
     woodsFood: params.woodsFood,
+    initialGranary: params.initialGranary,
+    freeRiderCount: params.freeRiderCount,
     testNormThresholds: params.testNormThresholds,
     normThresholds: params.normThresholds,
     label: params.label,
     experimentParams: params,
   });
-  const lines: string[] = [];
 
-  const results = await orch.runDays(params.days);
-  for (const r of results) {
+  const lines: string[] = [];
+  const daily: DailyMetricSample[] = [];
+  const sampleDaily = opts.sampleDaily !== false;
+
+  const ticksPerDay = orch.getClock().ticksPerDay;
+  const totalTicks = params.days * ticksPerDay;
+  let lastDay = -1;
+  for (let i = 0; i < totalTicks; i++) {
+    const r = await orch.advanceOneTick();
     lines.push(
       JSON.stringify({
         type: "tick",
@@ -94,9 +163,13 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
         faults: r.faults,
       }),
     );
+    if (sampleDaily && r.day !== lastDay) {
+      lastDay = r.day;
+      daily.push(sampleDay(orch, { ...params, days: params.days }));
+    }
   }
 
-  return finalize(orch, { ...opts, days: params.days, seed: params.seed, scenario: params.scenario }, lines, params);
+  return finalize(orch, opts, lines, params, daily);
 }
 
 function finalize(
@@ -111,6 +184,7 @@ function finalize(
   },
   lines: string[],
   params: ExperimentParams,
+  dailyMetrics: DailyMetricSample[] = [],
 ): RunSummary {
   const agents = orch.getSimulationState().agents;
   const agentIds = Object.keys(agents);
@@ -166,6 +240,7 @@ function finalize(
     memoryCount: orch.getMemory().count(),
     emergentNormCount: orch.getSocial().emergentNormCount(),
     metrics,
+    dailyMetrics,
     experimentParams: metrics.meta.params,
     checkpointPath,
     logPath,
@@ -195,23 +270,11 @@ export async function resumeSimulation(opts: {
     experimentParams?: Record<string, unknown>;
   };
 
-  const factory =
-    bundle.scenarioId === "dyad-cabin"
-      ? (id: string) =>
-          new RuleCognitiveEngine({
-            roleHint: id === "agent-alice" ? "promisor" : "promisee",
-          })
-      : bundle.scenarioId === "trio-cabin"
-        ? (id: string) =>
-            new RuleCognitiveEngine({
-              roleHint:
-                id === "agent-alice"
-                  ? "cooperative"
-                  : id === "agent-bob"
-                    ? "grabber"
-                    : "neutral",
-            })
-        : undefined;
+  const freeRiderCount =
+    typeof bundle.experimentParams?.freeRiderCount === "number"
+      ? bundle.experimentParams.freeRiderCount
+      : undefined;
+  const factory = cognitionFactoryFor(bundle.scenarioId, freeRiderCount);
 
   const orch = TickOrchestrator.fromCheckpoint(bundle, undefined, factory);
   const startTick = orch.getClock().tick;
@@ -234,10 +297,8 @@ export async function resumeSimulation(opts: {
 
   const outCkpt =
     opts.checkpointPath.replace(/\.json$/, "") + ".resumed.json";
-  fs.writeFileSync(
-    outCkpt,
-    JSON.stringify(orch.toCheckpoint(path.basename(outCkpt)), null, 2),
-  );
+  const ckptObj = orch.toCheckpoint(path.basename(outCkpt));
+  fs.writeFileSync(outCkpt, JSON.stringify(ckptObj, null, 2));
 
   const ep = bundle.experimentParams ?? {};
   const params: ExperimentParams = {
@@ -247,6 +308,10 @@ export async function resumeSimulation(opts: {
     storehouseFood:
       typeof ep.storehouseFood === "number" ? ep.storehouseFood : undefined,
     woodsFood: typeof ep.woodsFood === "number" ? ep.woodsFood : undefined,
+    initialGranary:
+      typeof ep.initialGranary === "number" ? ep.initialGranary : undefined,
+    freeRiderCount:
+      typeof ep.freeRiderCount === "number" ? ep.freeRiderCount : undefined,
     label: typeof ep.label === "string" ? ep.label : undefined,
   };
 
@@ -265,7 +330,6 @@ export async function resumeSimulation(opts: {
   );
 }
 
-/** Run experiment params end-to-end and return metrics (shipped path for compare). */
 export async function runExperiment(params: ExperimentParams): Promise<RunMetrics> {
   const summary = await runSimulation({
     scenario: params.scenario,
@@ -273,9 +337,12 @@ export async function runExperiment(params: ExperimentParams): Promise<RunMetric
     seed: params.seed,
     storehouseFood: params.storehouseFood,
     woodsFood: params.woodsFood,
+    initialGranary: params.initialGranary,
+    freeRiderCount: params.freeRiderCount,
     label: params.label,
     testNormThresholds: params.testNormThresholds,
     experimentParams: params,
+    sampleDaily: false,
   });
   return summary.metrics!;
 }
@@ -286,7 +353,7 @@ export async function compareExperimentParams(opts: {
   days: number;
   a: Partial<ExperimentParams>;
   b: Partial<ExperimentParams>;
-}): Promise<ReturnType<typeof compareParams> extends Promise<infer R> ? R : never> {
+}) {
   const base: ExperimentParams = {
     seed: opts.seed,
     scenario: opts.scenario,
@@ -295,5 +362,59 @@ export async function compareExperimentParams(opts: {
   return compareParams(base, opts.a, opts.b, runExperiment);
 }
 
-export { parseParamPairs, mergeParams, computeRunMetrics, compareParams };
-export type { ExperimentParams, RunMetrics };
+export async function exportBundle(opts: {
+  scenario: ScenarioId;
+  days: number;
+  seed: string;
+  out: string;
+  storehouseFood?: number;
+  woodsFood?: number;
+  initialGranary?: number;
+  freeRiderCount?: number;
+  label?: string;
+}): Promise<GssBundleV1> {
+  const params: ExperimentParams = {
+    seed: opts.seed,
+    scenario: opts.scenario,
+    days: opts.days,
+    storehouseFood: opts.storehouseFood,
+    woodsFood: opts.woodsFood,
+    initialGranary: opts.initialGranary,
+    freeRiderCount: opts.freeRiderCount,
+    label: opts.label,
+  };
+  const summary = await runSimulation({
+    ...opts,
+    experimentParams: params,
+    sampleDaily: true,
+  });
+  const bundle = createBundle({
+    params,
+    metrics: summary.metrics!,
+    dailyMetrics: summary.dailyMetrics,
+    checkpointRef: summary.checkpointPath,
+  });
+  const abs = path.resolve(opts.out);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, JSON.stringify(bundle, null, 2));
+  return bundle;
+}
+
+export function inspectBundleFile(inPath: string): string {
+  const raw = JSON.parse(fs.readFileSync(path.resolve(inPath), "utf8"));
+  const v = validateBundle(raw);
+  if (!v.ok) {
+    throw new Error(`invalid bundle: ${v.errors.join("; ")}`);
+  }
+  return inspectBundleSummary(v.bundle!);
+}
+
+export {
+  parseParamPairs,
+  mergeParams,
+  computeRunMetrics,
+  compareParams,
+  validateBundle,
+  createBundle,
+};
+export type { ExperimentParams, RunMetrics, GssBundleV1, DailyMetricSample };

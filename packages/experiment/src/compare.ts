@@ -12,9 +12,14 @@ export interface CompareResult {
     emergentNormCount: number;
     giveOk: number;
     takeOk: number;
+    publicStock: number;
+    freeRideWithdrawals: number;
+    totalContributed: number;
   };
   /** true if b.totalFood > a.totalFood (e.g. abundant > scarce) */
   bHasMoreFood: boolean;
+  /** true if free-ride condition withdrew more than cooperative (when a=coop, b=free) */
+  bWithdrewMore: boolean;
 }
 
 export function diffMetrics(a: RunMetrics, b: RunMetrics): CompareResult["diff"] {
@@ -26,6 +31,12 @@ export function diffMetrics(a: RunMetrics, b: RunMetrics): CompareResult["diff"]
       b.social.emergentNormCount - a.social.emergentNormCount,
     giveOk: b.actions.giveOk - a.actions.giveOk,
     takeOk: b.actions.takeOk - a.actions.takeOk,
+    publicStock:
+      b.publicGoods.publicStock - a.publicGoods.publicStock,
+    freeRideWithdrawals:
+      b.publicGoods.freeRideWithdrawals - a.publicGoods.freeRideWithdrawals,
+    totalContributed:
+      b.publicGoods.totalContributed - a.publicGoods.totalContributed,
   };
 }
 
@@ -36,6 +47,8 @@ export function buildCompareResult(a: RunMetrics, b: RunMetrics): CompareResult 
     b,
     diff,
     bHasMoreFood: b.totals.totalFood > a.totals.totalFood,
+    bWithdrewMore:
+      b.publicGoods.freeRideWithdrawals > a.publicGoods.freeRideWithdrawals,
   };
 }
 

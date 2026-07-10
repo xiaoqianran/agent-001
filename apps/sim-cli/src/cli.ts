@@ -7,6 +7,8 @@ import {
   compareExperimentParams,
   computeRunMetrics,
   parseParamPairs,
+  exportBundle,
+  inspectBundleFile,
   type ExperimentParams,
   type ScenarioId,
 } from "@gss/sim";
@@ -17,24 +19,19 @@ function usage(): never {
   console.log(`gss-sim — Generative Social Simulator CLI
 
 Usage:
-  pnpm sim run --scenario trio-cabin --days 5 --seed 42
-  pnpm sim run --scenario trio-cabin --days 5 --seed 42 \\
-    --param storehouseFood=3 --param woodsFood=1 --label scarce --metrics-out ./out/m.json
-  pnpm sim compare-params --scenario trio-cabin --seed 42 --days 5 \\
-    --a storehouseFood=3 --b storehouseFood=20
-  pnpm sim metrics --from-checkpoint ./ckpts/t.json
-  pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
+  pnpm sim run --scenario commons-cabin --days 5 --seed 42 --metrics-out ./out/m.json
+  pnpm sim compare-params --scenario commons-cabin --seed 42 --days 5 \\
+    --a freeRiderCount=0 --a label=cooperative \\
+    --b freeRiderCount=2 --b label=free-ride
+  pnpm sim export-bundle --scenario commons-cabin --days 5 --seed 42 --out ./bundles/run.json
+  pnpm sim inspect-bundle --in ./bundles/run.json
 
 Options:
-  --scenario <id>     solo-cabin | dyad-cabin | trio-cabin
-  --days <n>
-  --seed <value>
-  --param key=value   repeatable (storehouseFood, woodsFood, …)
-  --label <name>
-  --metrics-out <path>
-  --checkpoint <path>
-  --log <path>
-  --a / --b           for compare-params (key=value pairs, repeatable as --a x=1)
+  --scenario solo-cabin|dyad-cabin|trio-cabin|commons-cabin
+  --days --seed --param key=value --label
+  --metrics-out --checkpoint --log
+  --a / --b for compare-params
+  --out / --in for bundle
 `);
   process.exit(1);
 }
@@ -68,8 +65,11 @@ async function main() {
 
   if (cmd === "run") {
     const partial = parseParamPairs(multi.param ?? []);
+    const scenario = (flags.scenario ??
+      partial.scenario ??
+      "solo-cabin") as ScenarioId;
     const summary = await runSimulation({
-      scenario: flags.scenario ?? partial.scenario ?? "solo-cabin",
+      scenario,
       days: Number(flags.days ?? partial.days ?? "1"),
       seed: flags.seed ?? partial.seed ?? "42",
       checkpointPath: flags.checkpoint,
@@ -77,14 +77,18 @@ async function main() {
       metricsOut: flags["metrics-out"],
       storehouseFood: partial.storehouseFood,
       woodsFood: partial.woodsFood,
+      initialGranary: partial.initialGranary,
+      freeRiderCount: partial.freeRiderCount,
       label: flags.label ?? partial.label,
       testNormThresholds: partial.testNormThresholds,
       experimentParams: {
         seed: flags.seed ?? partial.seed ?? "42",
-        scenario: (flags.scenario ?? partial.scenario ?? "solo-cabin") as ScenarioId,
+        scenario,
         days: Number(flags.days ?? partial.days ?? "1"),
         storehouseFood: partial.storehouseFood,
         woodsFood: partial.woodsFood,
+        initialGranary: partial.initialGranary,
+        freeRiderCount: partial.freeRiderCount,
         label: flags.label ?? partial.label,
         testNormThresholds: partial.testNormThresholds,
         normThresholds: partial.normThresholds,
@@ -113,17 +117,45 @@ async function main() {
     const a = parseParamPairs(multi.a ?? multi.param ?? []);
     const b = parseParamPairs(multi.b ?? []);
     if (Object.keys(b).length === 0) {
-      console.error("compare-params requires --a and --b key=value pairs");
+      console.error("compare-params requires --a and --b");
       process.exit(2);
     }
     const result = await compareExperimentParams({
       seed: flags.seed ?? "42",
       scenario: (flags.scenario ?? "trio-cabin") as ScenarioId,
       days: Number(flags.days ?? "5"),
-      a: { ...a, label: a.label ?? "scarce" },
-      b: { ...b, label: b.label ?? "abundant" },
+      a: { ...a, label: a.label ?? "A" },
+      b: { ...b, label: b.label ?? "B" },
     });
     console.log(JSON.stringify(result, null, 2));
+    process.exit(0);
+  }
+
+  if (cmd === "export-bundle") {
+    const partial = parseParamPairs(multi.param ?? []);
+    const out = flags.out ?? "./bundle.json";
+    const bundle = await exportBundle({
+      scenario: (flags.scenario ?? "commons-cabin") as ScenarioId,
+      days: Number(flags.days ?? "5"),
+      seed: flags.seed ?? "42",
+      out,
+      storehouseFood: partial.storehouseFood,
+      woodsFood: partial.woodsFood,
+      initialGranary: partial.initialGranary,
+      freeRiderCount: partial.freeRiderCount,
+      label: flags.label ?? partial.label,
+    });
+    console.log(JSON.stringify({ ok: true, out, format: bundle.format }, null, 2));
+    process.exit(0);
+  }
+
+  if (cmd === "inspect-bundle") {
+    const inn = flags.in ?? flags.input;
+    if (!inn) {
+      console.error("inspect-bundle requires --in <path>");
+      process.exit(2);
+    }
+    console.log(inspectBundleFile(inn));
     process.exit(0);
   }
 
@@ -141,12 +173,11 @@ async function main() {
     const orch = TickOrchestrator.fromCheckpoint(bundle);
     const params: ExperimentParams = {
       seed: bundle.seed?.value ?? "unknown",
-      scenario: bundle.scenarioId ?? "trio-cabin",
+      scenario: bundle.scenarioId ?? "commons-cabin",
       days: bundle.clock?.day ?? 0,
       ...(bundle.experimentParams ?? {}),
     };
-    const m = computeRunMetrics(orch, params);
-    console.log(JSON.stringify(m, null, 2));
+    console.log(JSON.stringify(computeRunMetrics(orch, params), null, 2));
     process.exit(0);
   }
 
@@ -160,18 +191,25 @@ async function main() {
       scenario,
       storehouseFood: partial.storehouseFood,
       woodsFood: partial.woodsFood,
+      initialGranary: partial.initialGranary,
+      freeRiderCount: partial.freeRiderCount,
     });
     await orch.runDays(days);
     const agents = orch.getSimulationState().agents;
-    const fp = computeFingerprint(
-      orch.world,
-      agents,
-      orch.getClock(),
-      orch.getActionSequence(),
-      orch.getMemory(),
-      orch.getSocial(),
+    console.log(
+      JSON.stringify(
+        computeFingerprint(
+          orch.world,
+          agents,
+          orch.getClock(),
+          orch.getActionSequence(),
+          orch.getMemory(),
+          orch.getSocial(),
+        ),
+        null,
+        2,
+      ),
     );
-    console.log(JSON.stringify(fp, null, 2));
     process.exit(0);
   }
 
@@ -180,18 +218,17 @@ async function main() {
     const seed = flags.seed ?? "42";
     const scenario = (flags.scenario ?? "solo-cabin") as ScenarioId;
     const partial = parseParamPairs(multi.param ?? []);
-    const a = createSimulation({
-      seed,
-      scenario,
-      storehouseFood: partial.storehouseFood,
-      woodsFood: partial.woodsFood,
-    });
-    const b = createSimulation({
-      seed,
-      scenario,
-      storehouseFood: partial.storehouseFood,
-      woodsFood: partial.woodsFood,
-    });
+    const mk = () =>
+      createSimulation({
+        seed,
+        scenario,
+        storehouseFood: partial.storehouseFood,
+        woodsFood: partial.woodsFood,
+        initialGranary: partial.initialGranary,
+        freeRiderCount: partial.freeRiderCount,
+      });
+    const a = mk();
+    const b = mk();
     await a.runDays(days);
     await b.runDays(days);
     const fa = computeFingerprint(

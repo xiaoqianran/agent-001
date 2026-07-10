@@ -16,12 +16,25 @@ export interface RunMetrics {
   totals: { totalFood: number; agentCount: number; poolFood: number; invFood: number };
   inequality: { foodGini: number };
   wellbeing: { meanHunger: number; maxHunger: number };
-  actions: { giveOk: number; takeOk: number; workOk: number };
+  actions: {
+    giveOk: number;
+    takeOk: number;
+    workOk: number;
+    contributeOk: number;
+    withdrawPublicOk: number;
+  };
   social: {
     emergentNormCount: number;
     promiseKept: number;
     promiseBroken: number;
     promisePending: number;
+  };
+  /** GOAL-005 public goods */
+  publicGoods: {
+    publicStock: number;
+    totalContributed: number;
+    freeRideWithdrawals: number;
+    granaryLevel: number;
   };
 }
 
@@ -79,6 +92,10 @@ export function computeRunMetrics(
 
   const seq = orch.getActionSequence();
   const promises = orch.getSocial().listPromises();
+  const granary = orch.world.getPublicGood("granary");
+  const publicStock = granary?.stock ?? 0;
+  // totalFood should include public stock for macro accounting
+  const totalFoodAll = totalFood + publicStock;
 
   const clock = orch.getClock();
   return {
@@ -92,7 +109,7 @@ export function computeRunMetrics(
       finalDay: clock.day,
     },
     totals: {
-      totalFood,
+      totalFood: totalFoodAll,
       agentCount: agentIds.length,
       poolFood,
       invFood,
@@ -103,12 +120,20 @@ export function computeRunMetrics(
       giveOk: countActionOk(seq, "give"),
       takeOk: countActionOk(seq, "take"),
       workOk: countActionOk(seq, "work"),
+      contributeOk: countActionOk(seq, "contribute"),
+      withdrawPublicOk: countActionOk(seq, "withdraw_public"),
     },
     social: {
       emergentNormCount: orch.getSocial().emergentNormCount(),
       promiseKept: promises.filter((p) => p.status === "kept").length,
       promiseBroken: promises.filter((p) => p.status === "broken").length,
       promisePending: promises.filter((p) => p.status === "pending").length,
+    },
+    publicGoods: {
+      publicStock,
+      totalContributed: granary?.totalContributed ?? 0,
+      freeRideWithdrawals: granary?.totalWithdrawn ?? 0,
+      granaryLevel: granary?.level ?? 0,
     },
   };
 }
@@ -168,7 +193,15 @@ export function metricsFromAgentsOnly(
       giveOk: countActionOk(actionSeq, "give"),
       takeOk: countActionOk(actionSeq, "take"),
       workOk: countActionOk(actionSeq, "work"),
+      contributeOk: countActionOk(actionSeq, "contribute"),
+      withdrawPublicOk: countActionOk(actionSeq, "withdraw_public"),
     },
     social,
+    publicGoods: {
+      publicStock: 0,
+      totalContributed: 0,
+      freeRideWithdrawals: 0,
+      granaryLevel: 0,
+    },
   };
 }

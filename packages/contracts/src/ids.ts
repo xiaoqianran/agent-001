@@ -38,7 +38,9 @@ export type ActionType =
   | "verify"
   | "sanction"
   | "mediate"
-  | "ritual";
+  | "ritual"
+  | "contribute"
+  | "withdraw_public";
 
 export type DecisionStyle =
   | "satisficing"

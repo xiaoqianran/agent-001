@@ -49,7 +49,18 @@ export class WorldAuthority {
         totals[`inv:${k}`] = (totals[`inv:${k}`] ?? 0) + v;
       }
     }
+    for (const g of Object.values(this.state.publicGoods ?? {})) {
+      totals[`public:${g.kind}`] = (totals[`public:${g.kind}`] ?? 0) + g.stock;
+    }
     return totals;
+  }
+
+  getPublicGood(id = "granary"): import("./types.js").PublicGoodRecord | undefined {
+    return this.state.publicGoods?.[id];
+  }
+
+  listPublicGoods(): import("./types.js").PublicGoodRecord[] {
+    return Object.values(this.state.publicGoods ?? {}).map((g) => structuredClone(g));
   }
 
   agentPlaces(): Record<string, string> {
@@ -238,11 +249,58 @@ export class WorldAuthority {
       }
       case "observe":
         return { ok: true, code: "OK" };
+      case "contribute": {
+        // deposit personal food into granary at co-located place
+        const goodId = String(proposal.structured.args?.publicGoodId ?? "granary");
+        const qty = proposal.structured.quantity ?? 1;
+        const kind = proposal.structured.itemKind ?? "food";
+        const good = this.state.publicGoods?.[goodId];
+        if (!good) {
+          return { ok: false, code: "UNKNOWN_TARGET", message: `no public good ${goodId}` };
+        }
+        if (good.placeId !== actor.placeId) {
+          return {
+            ok: false,
+            code: "OUT_OF_RANGE",
+            message: "must be at granary place to contribute",
+          };
+        }
+        if ((actor.inventory[kind] ?? 0) < qty) {
+          return { ok: false, code: "INSUFFICIENT_RESOURCE", message: "not enough inventory" };
+        }
+        return { ok: true, code: "OK" };
+      }
+      case "withdraw_public": {
+        const goodId = String(proposal.structured.args?.publicGoodId ?? "granary");
+        const qty = proposal.structured.quantity ?? 1;
+        const good = this.state.publicGoods?.[goodId];
+        if (!good) {
+          return { ok: false, code: "UNKNOWN_TARGET", message: `no public good ${goodId}` };
+        }
+        if (good.placeId !== actor.placeId) {
+          return {
+            ok: false,
+            code: "OUT_OF_RANGE",
+            message: "must be at granary place to withdraw",
+          };
+        }
+        if (good.stock < qty) {
+          return {
+            ok: false,
+            code: "INSUFFICIENT_RESOURCE",
+            message: "public stock empty",
+          };
+        }
+        if (actor.carriedMass + qty > actor.carryCapacity) {
+          return { ok: false, code: "PRECONDITION", message: "over carry capacity" };
+        }
+        return { ok: true, code: "OK" };
+      }
       default:
         return {
           ok: false,
           code: "PRECONDITION",
-          message: `verb ${verb} not supported in GOAL-001 world`,
+          message: `verb ${verb} not supported in this world`,
         };
     }
   }
@@ -355,6 +413,36 @@ export class WorldAuthority {
       }
       case "observe": {
         percepts.push("observed");
+        break;
+      }
+      case "contribute": {
+        const goodId = String(proposal.structured.args?.publicGoodId ?? "granary");
+        const qty = proposal.structured.quantity ?? 1;
+        const kind = proposal.structured.itemKind ?? "food";
+        const good = this.state.publicGoods![goodId]!;
+        actor.inventory[kind] = (actor.inventory[kind] ?? 0) - qty;
+        if (actor.inventory[kind] <= 0) delete actor.inventory[kind];
+        actor.carriedMass = Math.max(0, actor.carriedMass - qty);
+        good.stock += qty;
+        good.contributors[actor.id] = (good.contributors[actor.id] ?? 0) + qty;
+        good.totalContributed += qty;
+        good.level = Math.min(1, good.level + qty * 0.02);
+        delta.inventory = [{ agentId: actor.id, itemKind: kind, delta: -qty }];
+        percepts.push(`contributed:${kind}x${qty}:to:${goodId}`);
+        break;
+      }
+      case "withdraw_public": {
+        const goodId = String(proposal.structured.args?.publicGoodId ?? "granary");
+        const qty = proposal.structured.quantity ?? 1;
+        const kind = "food";
+        const good = this.state.publicGoods![goodId]!;
+        good.stock -= qty;
+        good.withdrawals[actor.id] = (good.withdrawals[actor.id] ?? 0) + qty;
+        good.totalWithdrawn += qty;
+        actor.inventory[kind] = (actor.inventory[kind] ?? 0) + qty;
+        actor.carriedMass += qty;
+        delta.inventory = [{ agentId: actor.id, itemKind: kind, delta: qty }];
+        percepts.push(`withdrew_public:${kind}x${qty}:from:${goodId}`);
         break;
       }
     }

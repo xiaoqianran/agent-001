@@ -24,7 +24,8 @@ export interface CognitiveEngineOptions {
     | "promisee"
     | "neutral"
     | "cooperative"
-    | "grabber";
+    | "grabber"
+    | "free_rider";
 }
 
 /**
@@ -257,8 +258,8 @@ export class RuleCognitiveEngine {
       add({ verb: "work", mutexSlots: ["manual"] }, 0.55);
     }
 
-    // Trio role biases (scarce world)
-    if (this.roleHint === "grabber" && foodHere) {
+    // Trio / commons role biases
+    if ((this.roleHint === "grabber" || this.roleHint === "free_rider") && foodHere) {
       add(
         {
           verb: "take",
@@ -269,9 +270,45 @@ export class RuleCognitiveEngine {
         0.93,
       );
     }
-    if (this.roleHint === "cooperative" && othersHere.length > 0) {
+    // Free-rider: prefer withdrawing public stock at cabin
+    if (this.roleHint === "free_rider") {
+      if (obs.place.id === "cabin") {
+        add(
+          {
+            verb: "withdraw_public",
+            quantity: 1,
+            mutexSlots: ["manual"],
+            args: { publicGoodId: "granary" },
+          },
+          0.96,
+        );
+      } else if (obs.place.adjacent.includes("cabin")) {
+        add(
+          {
+            verb: "move",
+            targetPlaceId: "cabin",
+            mutexSlots: ["locomotion"],
+          },
+          0.9,
+        );
+      }
+    }
+    if (this.roleHint === "cooperative") {
       const haveFood = (inv.food ?? 0) >= 1;
-      if (haveFood) {
+      // Contribute to granary when at cabin with food
+      if (haveFood && obs.place.id === "cabin") {
+        add(
+          {
+            verb: "contribute",
+            itemKind: "food",
+            quantity: 1,
+            mutexSlots: ["manual"],
+            args: { publicGoodId: "granary" },
+          },
+          0.94,
+        );
+      }
+      if (haveFood && othersHere.length > 0) {
         add(
           {
             verb: "give",
@@ -282,7 +319,8 @@ export class RuleCognitiveEngine {
           },
           0.72,
         );
-      } else if (foodHere) {
+      }
+      if (!haveFood && foodHere) {
         add(
           {
             verb: "take",
@@ -290,8 +328,31 @@ export class RuleCognitiveEngine {
             quantity: 1,
             mutexSlots: ["manual"],
           },
-          0.8,
+          0.85,
         );
+      }
+      // go cabin to contribute
+      if (haveFood && obs.place.id !== "cabin" && obs.place.adjacent.includes("cabin")) {
+        add(
+          {
+            verb: "move",
+            targetPlaceId: "cabin",
+            mutexSlots: ["locomotion"],
+          },
+          0.88,
+        );
+      }
+      if (haveFood && obs.place.id !== "cabin") {
+        for (const t of obs.place.adjacent) {
+          add(
+            {
+              verb: "move",
+              targetPlaceId: t,
+              mutexSlots: ["locomotion"],
+            },
+            0.7 + (t === "cabin" || t === "woods" ? 0.1 : 0),
+          );
+        }
       }
       add({ verb: "work", mutexSlots: ["manual"] }, 0.62);
     }
@@ -342,9 +403,9 @@ export class RuleCognitiveEngine {
       }
     }
 
-    // Strip any give options that still exceed inventory (safety net)
+    // Strip give/contribute options that exceed inventory (safety net)
     for (const o of options) {
-      if (o.action.verb === "give") {
+      if (o.action.verb === "give" || o.action.verb === "contribute") {
         const need = o.action.quantity ?? 1;
         const kind = o.action.itemKind ?? "food";
         if ((inv[kind] ?? 0) < need) {

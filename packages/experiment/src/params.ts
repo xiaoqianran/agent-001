@@ -1,4 +1,8 @@
-export type ScenarioId = "solo-cabin" | "dyad-cabin" | "trio-cabin";
+export type ScenarioId =
+  | "solo-cabin"
+  | "dyad-cabin"
+  | "trio-cabin"
+  | "commons-cabin";
 
 export interface NormThresholdOverride {
   tFreq?: number;
@@ -6,7 +10,7 @@ export interface NormThresholdOverride {
   windowTicks?: number;
 }
 
-/** GOAL-004 experiment / scenario knobs */
+/** GOAL-004/005 experiment / scenario knobs */
 export interface ExperimentParams {
   seed: string;
   scenario: ScenarioId;
@@ -15,8 +19,15 @@ export interface ExperimentParams {
   storehouseFood?: number;
   /** Initial woods food pool */
   woodsFood?: number;
+  /** Initial granary public stock (commons-cabin) */
+  initialGranary?: number;
+  /**
+   * Commons role mix: 0 = all cooperative-leaning, 1 = one free_rider (default),
+   * 2 = two free_riders (Alice coop, Bob+Carol free_rider).
+   */
+  freeRiderCount?: number;
   normThresholds?: NormThresholdOverride;
-  /** baseline | scarce | abundant | custom */
+  /** baseline | scarce | abundant | custom | cooperative | free-ride */
   label?: string;
   testNormThresholds?: boolean;
 }
@@ -30,7 +41,13 @@ export function parseParamPairs(
     if (eq <= 0) continue;
     const key = p.slice(0, eq).trim();
     const raw = p.slice(eq + 1).trim();
-    if (key === "storehouseFood" || key === "woodsFood" || key === "days") {
+    if (
+      key === "storehouseFood" ||
+      key === "woodsFood" ||
+      key === "days" ||
+      key === "initialGranary" ||
+      key === "freeRiderCount"
+    ) {
       out[key] = Number(raw);
     } else if (key === "label" || key === "seed" || key === "scenario") {
       out[key] = raw;
@@ -70,6 +87,8 @@ export function paramsToRecord(p: ExperimentParams): Record<string, unknown> {
     days: p.days,
     storehouseFood: p.storehouseFood,
     woodsFood: p.woodsFood,
+    initialGranary: p.initialGranary,
+    freeRiderCount: p.freeRiderCount,
     normThresholds: p.normThresholds,
     label: p.label,
     testNormThresholds: p.testNormThresholds,
