@@ -182,4 +182,4 @@ interface GssBundleV1 {
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-006：** 制度参数实验包（执法强度/透明度旋钮）+ 简单回放时间线导出；或 **Control Room API 桩**（观察/注入事件，无精美前端）。  
+**GOAL-006（已成文）：** [GOAL-006-institution-control-api.md](./GOAL-006-institution-control-api.md) — 制度旋钮、Control Room API 桩、时间线导出。  
