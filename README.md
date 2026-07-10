@@ -50,8 +50,10 @@ pnpm sim compare-seeds --scenario dyad-cabin --seed 42 --days 5
 - [总体设计蓝图](docs/design/generative-social-simulator-blueprint.md)
 - [Git Commit 规范](docs/COMMIT_CONVENTION.md)
 - [GOAL-001 规格](docs/goals/GOAL-001-runtime-foundation.md)（已完成：运行时地基）
-- [GOAL-002 规格](docs/goals/GOAL-002-memory-social-dyad.md)（下一步：记忆 + 小群体）
+- [GOAL-002 规格](docs/goals/GOAL-002-memory-social-dyad.md)（已完成：记忆 + 小群体）
+- [GOAL-003 规格](docs/goals/GOAL-003-norms-scarce-trio.md)（下一步：规范涌现 + 三人稀缺）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
+- [记忆与小群体](docs/engineering/memory-social-dyad.md)
 
 ## 核心目标
 

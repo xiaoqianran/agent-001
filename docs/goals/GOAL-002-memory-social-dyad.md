@@ -173,7 +173,7 @@ PromiseRecord {
 
 - 验收 1–9 全部满足  
 - 与蓝图偏差写入 engineering 文档偏差表  
-- 向用户说明：如何跑 dyad-cabin、承诺续跑如何验证、下一 goal 建议（GOAL-003：规范涌现计数 + 成本分级 / 或 制度参数实验迷你）  
+- 向用户说明：如何跑 dyad-cabin、承诺续跑如何验证；下一 goal 见 [GOAL-003](./GOAL-003-norms-scarce-trio.md)  
 
 ---
 
