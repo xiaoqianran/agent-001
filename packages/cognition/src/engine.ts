@@ -35,6 +35,8 @@ export interface CognitiveEngineOptions {
     | "grabber"
     | "free_rider";
   institution?: CognitionInstitution;
+  /** GOAL-008: enable propose_policy / vote_policy options */
+  enableLegislature?: boolean;
 }
 
 /**
@@ -46,12 +48,14 @@ export class RuleCognitiveEngine {
   private forceThrow: boolean;
   private roleHint: NonNullable<CognitiveEngineOptions["roleHint"]>;
   private institution: CognitionInstitution;
+  private enableLegislature: boolean;
 
   constructor(opts: CognitiveEngineOptions = {}) {
     this.llm = opts.llm ?? new StubLlm();
     this.forceThrow = opts.forceThrow ?? false;
     this.roleHint = opts.roleHint ?? "neutral";
     this.institution = { ...(opts.institution ?? {}) };
+    this.enableLegislature = opts.enableLegislature ?? false;
   }
 
   setForceThrow(v: boolean): void {
@@ -289,6 +293,73 @@ export class RuleCognitiveEngine {
         0.93,
       );
     }
+    // GOAL-008 legislature options at cabin (assembly scenarios only)
+    if (this.enableLegislature && obs.place.id === "cabin") {
+      const open = social?.openPolicies ?? [];
+      const inst = social?.institution ?? {};
+      if (open.length === 0 && input.clock.tick <= 36) {
+        // propose based on role
+        if (this.roleHint === "cooperative") {
+          add(
+            {
+              verb: "propose_policy",
+              mutexSlots: ["speech"],
+              args: {
+                assemblyPlaceId: "cabin",
+                patch: {
+                  enforcementStrength: 0.85,
+                  contributionReward: 0.7,
+                },
+              },
+            },
+            0.88,
+          );
+        }
+        if (this.roleHint === "free_rider") {
+          add(
+            {
+              verb: "propose_policy",
+              mutexSlots: ["speech"],
+              args: {
+                assemblyPlaceId: "cabin",
+                patch: {
+                  enforcementStrength: 0.1,
+                  freeRidePenalty: 0,
+                },
+              },
+            },
+            0.86,
+          );
+        }
+      }
+      for (const pol of open) {
+        const favorStrict =
+          this.roleHint === "cooperative" || this.roleHint === "neutral";
+        const enf = Number(
+          (pol.patch as { enforcementStrength?: number }).enforcementStrength ??
+            -1,
+        );
+        let vote: "yea" | "nay" = "yea";
+        if (this.roleHint === "free_rider" && enf >= 0.5) vote = "nay";
+        if (favorStrict && enf >= 0 && enf < 0.3) vote = "nay";
+        if (this.roleHint === "cooperative" && enf >= 0.5) vote = "yea";
+        // avoid self-double issues — still ok to vote own proposal
+        add(
+          {
+            verb: "vote_policy",
+            mutexSlots: ["speech"],
+            args: {
+              assemblyPlaceId: "cabin",
+              proposalId: pol.id,
+              vote,
+            },
+          },
+          0.91,
+        );
+      }
+      void inst;
+    }
+
     // Free-rider: prefer withdrawing public stock at cabin
     if (this.roleHint === "free_rider") {
       if (obs.place.id === "cabin") {

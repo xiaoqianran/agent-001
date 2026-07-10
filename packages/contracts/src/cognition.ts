@@ -85,6 +85,15 @@ export interface SocialContextLite {
     actionType: string;
     strength: number;
   }>;
+  /** GOAL-008 open policy proposals (read-only) */
+  openPolicies?: Array<{
+    id: string;
+    author: string;
+    patch: Record<string, unknown>;
+    placeId: string;
+  }>;
+  /** current institution knobs snapshot */
+  institution?: Record<string, unknown>;
 }
 
 export interface RetrievedMemoryLite {

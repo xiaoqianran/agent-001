@@ -4,6 +4,7 @@ import {
   createDyadCabinWorld,
   createTrioCabinWorld,
   createCommonsCabinWorld,
+  createAssemblyCabinWorld,
   WorldAuthority,
   type FoodPoolOpts,
 } from "@gss/world";
@@ -271,6 +272,54 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       ticksPerDay: o.ticksPerDay ?? 24,
       institution: inst,
     }), o);
+  }
+
+  if (scenarioId === "assembly-cabin") {
+    // Same as commons but emphasize legislature roles at cabin
+    const aliceId = "agent-alice";
+    const bobId = "agent-bob";
+    const carolId = "agent-carol";
+    const freeN = o.freeRiderCount ?? 1;
+    const world = new WorldAuthority(
+      createAssemblyCabinWorld(aliceId, bobId, carolId, {
+        ...food,
+        initialGranary: o.initialGranary ?? 3,
+      }),
+      inst,
+    );
+    const alice = createAgentState(aliceId, "Alice", "cabin");
+    const bob = createAgentState(bobId, "Bob", "cabin");
+    const carol = createAgentState(carolId, "Carol", "cabin");
+    alice.identitySummary = "Alice, proposes stronger commons rules";
+    bob.identitySummary =
+      freeN >= 1 ? "Bob, resists strict enforcement" : "Bob, moderate voter";
+    carol.identitySummary = "Carol, swing voter at assembly";
+    bob.needs.hunger = 0.4;
+    carol.needs.hunger = 0.35;
+    const roleFor = (id: string): "cooperative" | "free_rider" | "neutral" => {
+      if (id === aliceId) return "cooperative";
+      if (id === bobId) return freeN >= 1 ? "free_rider" : "cooperative";
+      return "neutral";
+    };
+    return withInterest(
+      new TickOrchestrator({
+        world,
+        seed,
+        scenarioId,
+        agentStates: { [aliceId]: alice, [bobId]: bob, [carolId]: carol },
+        cognitionFactory: (id) =>
+          new RuleCognitiveEngine({
+            llm,
+            roleHint: roleFor(id),
+            institution: inst,
+            enableLegislature: true,
+          }),
+        social,
+        ticksPerDay: o.ticksPerDay ?? 24,
+        institution: inst,
+      }),
+      o,
+    );
   }
 
   throw new Error(`unknown scenario ${scenarioId}`);

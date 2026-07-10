@@ -34,6 +34,12 @@ const sampleMetrics: RunMetrics = {
     granaryLevel: 0.2,
   },
   runtime: { skippedCognitiveTicks: 0 },
+  policy: {
+    proposalsOpen: 0,
+    proposalsPassed: 0,
+    proposalsRejected: 0,
+    institution: {},
+  },
 };
 
 describe("gss-bundle@1", () => {

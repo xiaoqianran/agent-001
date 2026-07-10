@@ -14,6 +14,7 @@ import {
   type Norm,
   type NormThresholds,
 } from "./norms.js";
+import { PolicyBoard } from "./policy.js";
 
 function edgeKey(a: AgentId, b: AgentId): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`;
@@ -24,7 +25,7 @@ function defaultDims(): RelationDimensions {
 }
 
 /**
- * Minimal social graph + promises + descriptive norms.
+ * Minimal social graph + promises + descriptive norms + policy board.
  * Event-reduced only; cognition reads SocialSlice (never writes).
  */
 export class SocialGraph {
@@ -32,9 +33,11 @@ export class SocialGraph {
   private promises = new Map<string, PromiseRecord>();
   private nextPromiseId = 1;
   readonly norms: NormTracker;
+  readonly policy: PolicyBoard;
 
   constructor(normThresholds: NormThresholds = DEFAULT_NORM_THRESHOLDS) {
     this.norms = new NormTracker(normThresholds);
+    this.policy = new PolicyBoard();
   }
 
   ensureEdge(a: AgentId, b: AgentId, type: RelationType = "acquaintance"): RelationEdge {
@@ -237,7 +240,15 @@ export class SocialGraph {
     const proms = [...this.promises.values()]
       .map((p) => `${p.id}:${p.from}->${p.to}:${p.status}:${p.content}`)
       .sort();
-    return edges.join("|") + "##" + proms.join("|") + "##N:" + this.norms.digest();
+    return (
+      edges.join("|") +
+      "##" +
+      proms.join("|") +
+      "##N:" +
+      this.norms.digest() +
+      "##P:" +
+      this.policy.digest()
+    );
   }
 
   snapshot(): SocialGraphSnapshot {
@@ -246,6 +257,7 @@ export class SocialGraph {
       promises: [...this.promises.values()].map((p) => structuredClone(p)),
       nextPromiseId: this.nextPromiseId,
       norms: this.norms.snapshot(),
+      policy: this.policy.snapshot(),
     };
   }
 
@@ -261,6 +273,9 @@ export class SocialGraph {
     this.nextPromiseId = snap.nextPromiseId;
     if (snap.norms) {
       this.norms.loadSnapshot(snap.norms);
+    }
+    if (snap.policy) {
+      this.policy.loadSnapshot(snap.policy);
     }
   }
 

@@ -40,7 +40,9 @@ export type ActionType =
   | "mediate"
   | "ritual"
   | "contribute"
-  | "withdraw_public";
+  | "withdraw_public"
+  | "propose_policy"
+  | "vote_policy";
 
 export type DecisionStyle =
   | "satisficing"

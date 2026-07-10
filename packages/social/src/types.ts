@@ -64,6 +64,8 @@ export interface SocialGraphSnapshot {
   nextPromiseId: number;
   /** GOAL-003 */
   norms?: import("./norms.js").NormSnapshot;
+  /** GOAL-008 */
+  policy?: import("./policy.js").PolicyBoardSnapshot;
 }
 
 export type SocialEvent =

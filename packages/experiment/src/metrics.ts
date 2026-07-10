@@ -40,6 +40,12 @@ export interface RunMetrics {
   runtime: {
     skippedCognitiveTicks: number;
   };
+  policy: {
+    proposalsOpen: number;
+    proposalsPassed: number;
+    proposalsRejected: number;
+    institution: Record<string, unknown>;
+  };
 }
 
 /** Gini coefficient for non-negative values; 0 if empty or all equal. */
@@ -142,6 +148,18 @@ export function computeRunMetrics(
     runtime: {
       skippedCognitiveTicks: orch.getSkippedCognitiveTicks?.() ?? 0,
     },
+    policy: {
+      proposalsOpen: orch.getSocial().policy.openProposals().length,
+      proposalsPassed: orch
+        .getSocial()
+        .policy.list()
+        .filter((p) => p.status === "passed").length,
+      proposalsRejected: orch
+        .getSocial()
+        .policy.list()
+        .filter((p) => p.status === "rejected").length,
+      institution: { ...orch.getInstitution() },
+    },
   };
 }
 
@@ -211,5 +229,11 @@ export function metricsFromAgentsOnly(
       granaryLevel: 0,
     },
     runtime: { skippedCognitiveTicks: 0 },
+    policy: {
+      proposalsOpen: 0,
+      proposalsPassed: 0,
+      proposalsRejected: 0,
+      institution: {},
+    },
   };
 }

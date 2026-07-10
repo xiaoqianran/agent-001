@@ -4,7 +4,8 @@ export type ScenarioId =
   | "solo-cabin"
   | "dyad-cabin"
   | "trio-cabin"
-  | "commons-cabin";
+  | "commons-cabin"
+  | "assembly-cabin";
 
 export interface NormThresholdOverride {
   tFreq?: number;

@@ -96,6 +96,12 @@ export class TickOrchestrator {
   private frozen = false;
   private interest: InterestConfig = {};
   private skippedCognitiveTicks = 0;
+  private institutionState: {
+    enforcementStrength?: number;
+    contributionReward?: number;
+    freeRidePenalty?: number;
+    transparency?: boolean;
+  } = {};
 
   constructor(args: {
     world: WorldAuthority;
@@ -177,14 +183,24 @@ export class TickOrchestrator {
     freeRidePenalty?: number;
     transparency?: boolean;
   }): void {
+    this.institutionState = { ...this.institutionState, ...inst };
     this.world.setInstitution({
-      enforcementStrength: inst.enforcementStrength,
-      transparency: inst.transparency,
+      enforcementStrength: this.institutionState.enforcementStrength,
+      transparency: this.institutionState.transparency,
     });
-    this.defaultCognition.setInstitution(inst);
+    this.defaultCognition.setInstitution(this.institutionState);
     for (const eng of this.cognitionByAgent.values()) {
-      eng.setInstitution(inst);
+      eng.setInstitution(this.institutionState);
     }
+  }
+
+  getInstitution(): {
+    enforcementStrength?: number;
+    contributionReward?: number;
+    freeRidePenalty?: number;
+    transparency?: boolean;
+  } {
+    return { ...this.institutionState };
   }
 
   private eng(agentId: string): RuleCognitiveEngine {
@@ -195,6 +211,88 @@ export class TickOrchestrator {
    * Focus agents/places always run; pending-promise agents always run.
    * Edge agents skip when hash/2^32 < edgeSkipChance.
    */
+  private handlePolicyAction(
+    proposal: ActionProposal,
+    placeId: string,
+  ): void {
+    const tick = this.state.clock.tick;
+    const verb = proposal.structured.verb;
+    try {
+      if (verb === "propose_policy") {
+        const patch = (proposal.structured.args?.patch ?? {}) as {
+          enforcementStrength?: number;
+          contributionReward?: number;
+          freeRidePenalty?: number;
+          transparency?: boolean;
+        };
+        const prop = this.social.policy.propose({
+          author: proposal.actor,
+          tick,
+          placeId,
+          patch,
+          expireTick: tick + 120,
+        });
+        this.memory.encode({
+          owner: proposal.actor,
+          kind: "social",
+          summary: `proposed policy ${prop.id} ${JSON.stringify(patch)}`,
+          tick,
+          tags: ["policy", "propose"],
+          importance: 0.7,
+        });
+      }
+      if (verb === "vote_policy") {
+        const proposalId = String(proposal.structured.args?.proposalId ?? "");
+        const vote = String(proposal.structured.args?.vote ?? "abstain") as
+          | "yea"
+          | "nay"
+          | "abstain";
+        const result = this.social.policy.vote({
+          proposalId,
+          voter: proposal.actor,
+          vote,
+          placeId,
+          tick,
+        });
+        this.memory.encode({
+          owner: proposal.actor,
+          kind: "social",
+          summary: `voted ${vote} on ${proposalId}`,
+          tick,
+          tags: ["policy", "vote"],
+          importance: 0.55,
+        });
+        if (result.justPassed) {
+          // Authority path: apply institution patch from passed proposal
+          this.applyInstitution(result.proposal.patch);
+          this.memory.encode({
+            owner: proposal.actor,
+            kind: "social",
+            summary: `policy ${proposalId} PASSED ${JSON.stringify(result.proposal.patch)}`,
+            tick,
+            tags: ["policy", "passed"],
+            importance: 0.9,
+            promiseClass: false,
+          });
+          // notify all agents via social memory
+          for (const id of this.world.listAgentIds()) {
+            if (id === proposal.actor) continue;
+            this.memory.encode({
+              owner: id,
+              kind: "social",
+              summary: `assembly passed ${proposalId}`,
+              tick,
+              tags: ["policy", "passed"],
+              importance: 0.75,
+            });
+          }
+        }
+      }
+    } catch {
+      // invalid policy ops already validated lightly; ignore race
+    }
+  }
+
   shouldSkipCognitive(agentId: string, placeId: string): boolean {
     const chance = this.interest.edgeSkipChance ?? 0;
     if (chance <= 0) return false;
@@ -317,6 +415,13 @@ export class TickOrchestrator {
             content: p.content,
           })),
           activeNorms: slice.activeNorms,
+          openPolicies: this.social.policy.openProposals().map((p) => ({
+            id: p.id,
+            author: p.author,
+            patch: p.patch as Record<string, unknown>,
+            placeId: p.placeId,
+          })),
+          institution: this.getInstitution() as Record<string, unknown>,
         };
 
         const memHits = this.memory.retrieve({
@@ -425,6 +530,8 @@ export class TickOrchestrator {
               importance: 0.6,
             });
           }
+          // GOAL-008 legislature
+          this.handlePolicyAction(proposal, bodyNow.placeId);
         }
         // episodic encode for actor
         this.memory.encode({

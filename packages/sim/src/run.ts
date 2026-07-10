@@ -10,6 +10,7 @@ import {
   createBundle,
   validateBundle,
   inspectBundleSummary,
+  renderDailyBrief,
   type ExperimentParams,
   type RunMetrics,
   type DailyMetricSample,
@@ -24,8 +25,8 @@ const SCENARIOS: ScenarioId[] = [
   "dyad-cabin",
   "trio-cabin",
   "commons-cabin",
+  "assembly-cabin",
 ];
-
 export interface RunOptions {
   scenario: string;
   days: number;
@@ -33,6 +34,7 @@ export interface RunOptions {
   checkpointPath?: string;
   logPath?: string;
   metricsOut?: string;
+  briefOut?: string;
   storehouseFood?: number;
   woodsFood?: number;
   initialGranary?: number;
@@ -63,6 +65,7 @@ export interface RunSummary {
   checkpointPath?: string;
   logPath?: string;
   metricsPath?: string;
+  briefPath?: string;
   agentId: string;
   placeId: string;
 }
@@ -88,14 +91,24 @@ function cognitionFactoryFor(
               : "neutral",
       });
   }
-  if (scenarioId === "commons-cabin") {
+  if (scenarioId === "commons-cabin" || scenarioId === "assembly-cabin") {
     const freeN = freeRiderCount ?? 1;
+    const legis = scenarioId === "assembly-cabin";
     return (id) => {
       let role: "cooperative" | "free_rider" | "neutral" = "neutral";
       if (id === "agent-alice") role = "cooperative";
       else if (id === "agent-bob") role = freeN >= 1 ? "free_rider" : "cooperative";
-      else if (id === "agent-carol") role = freeN >= 2 ? "free_rider" : "neutral";
-      return new RuleCognitiveEngine({ roleHint: role });
+      else if (id === "agent-carol")
+        role =
+          scenarioId === "assembly-cabin"
+            ? "neutral"
+            : freeN >= 2
+              ? "free_rider"
+              : "neutral";
+      return new RuleCognitiveEngine({
+        roleHint: role,
+        enableLegislature: legis,
+      });
     };
   }
   return undefined;
@@ -188,6 +201,7 @@ function finalize(
     checkpointPath?: string;
     logPath?: string;
     metricsOut?: string;
+    briefOut?: string;
   },
   lines: string[],
   params: ExperimentParams,
@@ -232,6 +246,13 @@ function finalize(
     fs.writeFileSync(metricsPath, JSON.stringify(metrics, null, 2));
   }
 
+  let briefPath: string | undefined;
+  if (opts.briefOut) {
+    briefPath = path.resolve(opts.briefOut);
+    fs.mkdirSync(path.dirname(briefPath), { recursive: true });
+    fs.writeFileSync(briefPath, renderDailyBrief(orch, params));
+  }
+
   let logPath = opts.logPath;
   const summary: RunSummary = {
     exitCode: 0,
@@ -252,6 +273,7 @@ function finalize(
     checkpointPath,
     logPath,
     metricsPath,
+    briefPath,
     agentId: agentIds[0]!,
     placeId: places[agentIds[0]!]!,
   };
@@ -423,5 +445,6 @@ export {
   compareParams,
   validateBundle,
   createBundle,
+  renderDailyBrief,
 };
 export type { ExperimentParams, RunMetrics, GssBundleV1, DailyMetricSample };

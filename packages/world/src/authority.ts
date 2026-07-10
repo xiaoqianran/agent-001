@@ -337,6 +337,50 @@ export class WorldAuthority {
         }
         return { ok: true, code: "OK" };
       }
+      case "propose_policy": {
+        const assembly = String(
+          proposal.structured.args?.assemblyPlaceId ?? "cabin",
+        );
+        if (actor.placeId !== assembly) {
+          return {
+            ok: false,
+            code: "OUT_OF_RANGE",
+            message: "must propose at assembly place",
+          };
+        }
+        const patch = proposal.structured.args?.patch as
+          | Record<string, unknown>
+          | undefined;
+        if (!patch || typeof patch !== "object") {
+          return { ok: false, code: "INVALID_ARGS", message: "patch required" };
+        }
+        return { ok: true, code: "OK" };
+      }
+      case "vote_policy": {
+        const assembly = String(
+          proposal.structured.args?.assemblyPlaceId ?? "cabin",
+        );
+        if (actor.placeId !== assembly) {
+          return {
+            ok: false,
+            code: "OUT_OF_RANGE",
+            message: "must vote at assembly place",
+          };
+        }
+        const proposalId = proposal.structured.args?.proposalId;
+        const vote = proposal.structured.args?.vote;
+        if (!proposalId || !vote) {
+          return {
+            ok: false,
+            code: "INVALID_ARGS",
+            message: "proposalId and vote required",
+          };
+        }
+        if (!["yea", "nay", "abstain"].includes(String(vote))) {
+          return { ok: false, code: "INVALID_ARGS", message: "bad vote value" };
+        }
+        return { ok: true, code: "OK" };
+      }
       default:
         return {
           ok: false,
@@ -484,6 +528,17 @@ export class WorldAuthority {
         actor.carriedMass += qty;
         delta.inventory = [{ agentId: actor.id, itemKind: kind, delta: qty }];
         percepts.push(`withdrew_public:${kind}x${qty}:from:${goodId}`);
+        break;
+      }
+      case "propose_policy": {
+        const patch = proposal.structured.args?.patch ?? {};
+        percepts.push(`proposed_policy:${JSON.stringify(patch)}`);
+        break;
+      }
+      case "vote_policy": {
+        percepts.push(
+          `voted_policy:${proposal.structured.args?.proposalId}:${proposal.structured.args?.vote}`,
+        );
         break;
       }
     }

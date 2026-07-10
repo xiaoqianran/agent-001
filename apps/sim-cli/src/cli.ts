@@ -9,6 +9,7 @@ import {
   parseParamPairs,
   exportBundle,
   inspectBundleFile,
+  renderDailyBrief,
   type ExperimentParams,
   type ScenarioId,
 } from "@gss/sim";
@@ -27,10 +28,12 @@ Usage:
   pnpm sim timeline --from-checkpoint ./ckpts/x.json --out ./tl.json
   pnpm sim inject --scenario commons-cabin --seed 1 --kind resource --payload '{"granaryDelta":2}'
   pnpm sim export-bundle --scenario commons-cabin --days 5 --seed 42 --out ./bundles/run.json
+  pnpm sim run --scenario assembly-cabin --days 5 --seed 42 --brief-out ./brief.md
+  pnpm sim brief --scenario assembly-cabin --days 3 --seed 42
 
 Options:
   --scenario --days --seed --param key=value --label
-  --metrics-out --timeline-out --checkpoint --log
+  --metrics-out --brief-out --timeline-out --checkpoint --log
   --a / --b --out / --in --kind --payload
 `);
   process.exit(1);
@@ -75,6 +78,7 @@ async function main() {
       checkpointPath: flags.checkpoint,
       logPath: flags.log,
       metricsOut: flags["metrics-out"],
+      briefOut: flags["brief-out"],
       storehouseFood: partial.storehouseFood,
       woodsFood: partial.woodsFood,
       initialGranary: partial.initialGranary,
@@ -198,6 +202,32 @@ async function main() {
       : { granaryDelta: 1 };
     const audit = cr.inject({ kind, payload });
     console.log(JSON.stringify({ audit, world: cr.getWorldView() }, null, 2));
+    process.exit(0);
+  }
+
+  if (cmd === "brief") {
+    const partial = parseParamPairs(multi.param ?? []);
+    const scenario = (flags.scenario ?? "assembly-cabin") as ScenarioId;
+    const days = Number(flags.days ?? "3");
+    const seed = flags.seed ?? "42";
+    const orch = createSimulation({
+      seed,
+      scenario,
+      freeRiderCount: partial.freeRiderCount ?? 1,
+    });
+    await orch.runDays(days);
+    const text = renderDailyBrief(orch, {
+      seed,
+      scenario,
+      days,
+    });
+    const out = flags.out ?? flags["brief-out"];
+    if (out) {
+      const dir = out.includes("/") ? out.slice(0, out.lastIndexOf("/")) : ".";
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(out, text);
+    }
+    console.log(text);
     process.exit(0);
   }
 
