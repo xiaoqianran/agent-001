@@ -73,12 +73,20 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [公共品与实验包](docs/engineering/public-goods-bundle.md)
 - [制度旋钮与 Control API](docs/engineering/institution-control-api.md)
 - [只读观测与 LOD](docs/engineering/observer-http.md)
+- [迷你立法与简报](docs/engineering/mini-legislature.md)
 
 ### 观测页
 
 ```bash
 pnpm observer --scenario commons-cabin --seed 42 --days 1 --port 8787
 # 浏览器打开 http://127.0.0.1:8787/
+```
+
+### 立法与简报
+
+```bash
+pnpm sim run --scenario assembly-cabin --days 5 --seed 42 --brief-out ./brief.md
+pnpm sim brief --scenario assembly-cabin --days 3 --seed 42
 ```
 
 ## 核心目标
