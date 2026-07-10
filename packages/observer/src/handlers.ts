@@ -5,6 +5,7 @@ import {
   computeRunMetrics,
   detectHighlightsFromOrch,
   type ExperimentParams,
+  type ExplainQuery,
 } from "@gss/experiment";
 
 export interface ObserverContext {
@@ -89,6 +90,23 @@ export async function handleObserverRequest(
 
   if (method === "GET" && urlPath === "/highlights") {
     return json(200, detectHighlightsFromOrch(ctx.orch, ctx.params));
+  }
+
+  if (method === "GET" && urlPath === "/explain") {
+    const q: ExplainQuery = {};
+    const tick = query.get("tick");
+    const agent = query.get("agent") ?? query.get("agentId");
+    const proposalId = query.get("proposalId") ?? query.get("proposal");
+    const actionLine = query.get("actionLine") ?? query.get("action-line");
+    const highlightKind = query.get("highlightKind") ?? query.get("from-highlight-kind");
+    const highlightId = query.get("highlightId");
+    if (tick !== null && tick !== "") q.tick = Number(tick);
+    if (agent) q.agentId = agent;
+    if (proposalId) q.proposalId = proposalId;
+    if (actionLine) q.actionLine = actionLine;
+    if (highlightKind) q.highlightKind = highlightKind;
+    if (highlightId) q.highlightId = highlightId;
+    return json(200, ctx.control.explain(q));
   }
 
   if (method === "GET" && urlPath === "/audit") {

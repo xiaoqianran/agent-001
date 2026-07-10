@@ -11,8 +11,10 @@ import {
   inspectBundleFile,
   renderDailyBrief,
   detectHighlightsFromOrch,
+  explainFromOrch,
   type ExperimentParams,
   type ScenarioId,
+  type ExplainQuery,
 } from "@gss/sim";
 import { computeFingerprint, fingerprintEqual, TickOrchestrator } from "@gss/runtime";
 import { ControlRoomService } from "@gss/control";
@@ -33,11 +35,17 @@ Usage:
   pnpm sim brief --scenario assembly-cabin --days 3 --seed 42
   pnpm sim highlights --scenario assembly-cabin --days 5 --seed 42
   pnpm sim run --scenario commons-cabin --days 3 --seed 42 --highlights-out ./hl.json
+  pnpm sim explain --scenario commons-cabin --days 3 --seed 42 --from-highlight-kind conflict
+  pnpm sim explain --scenario commons-cabin --days 3 --seed 42 --tick 5 --agent agent-bob
+  pnpm sim explain --scenario assembly-cabin --days 5 --seed 42 --proposal prop-1
+  pnpm sim explain --scenario commons-cabin --days 3 --seed 42 \\
+    --action-line '5:agent-bob:withdraw_public:REJECT:INSUFFICIENT_RESOURCE'
 
 Options:
   --scenario --days --seed --param key=value --label
   --metrics-out --brief-out --highlights-out --timeline-out --checkpoint --log
   --a / --b --out / --in --kind --payload
+  --tick --agent --proposal --action-line --from-highlight-kind --from-checkpoint
 `);
   process.exit(1);
 }
@@ -269,6 +277,67 @@ async function main() {
     const highlights = detectHighlightsFromOrch(orch, params);
     const out = flags.out ?? flags["highlights-out"];
     const body = JSON.stringify(highlights, null, 2);
+    if (out) {
+      const dir = out.includes("/") ? out.slice(0, out.lastIndexOf("/")) : ".";
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(out, body);
+    }
+    console.log(body);
+    process.exit(0);
+  }
+
+  if (cmd === "explain") {
+    const partial = parseParamPairs(multi.param ?? []);
+    let orch: TickOrchestrator;
+    const ckpt = flags["from-checkpoint"] ?? flags.checkpoint;
+    if (ckpt) {
+      const bundle = JSON.parse(fs.readFileSync(ckpt, "utf8"));
+      orch = TickOrchestrator.fromCheckpoint(bundle);
+    } else {
+      const scenario = (flags.scenario ?? "commons-cabin") as ScenarioId;
+      const days = Number(flags.days ?? "3");
+      const seed = flags.seed ?? "42";
+      orch = createSimulation({
+        seed,
+        scenario,
+        freeRiderCount: partial.freeRiderCount ?? 1,
+        storehouseFood: partial.storehouseFood,
+        woodsFood: partial.woodsFood,
+        initialGranary: partial.initialGranary,
+        enforcementStrength: partial.enforcementStrength,
+        contributionReward: partial.contributionReward,
+        freeRidePenalty: partial.freeRidePenalty,
+        transparency: partial.transparency,
+      });
+      await orch.runDays(days);
+    }
+
+    const q: ExplainQuery = {};
+    if (flags.tick !== undefined) q.tick = Number(flags.tick);
+    if (flags.agent) q.agentId = flags.agent;
+    if (flags.proposal) q.proposalId = flags.proposal;
+    if (flags["proposal-id"]) q.proposalId = flags["proposal-id"];
+    if (flags["action-line"]) q.actionLine = flags["action-line"];
+    if (flags["from-highlight-kind"]) {
+      q.highlightKind = flags["from-highlight-kind"];
+    }
+    if (flags["highlight-id"]) q.highlightId = flags["highlight-id"];
+
+    // default: first conflict highlight if no query fields
+    if (
+      q.tick === undefined &&
+      !q.agentId &&
+      !q.proposalId &&
+      !q.actionLine &&
+      !q.highlightKind &&
+      !q.highlightId
+    ) {
+      q.highlightKind = "conflict";
+    }
+
+    const chain = explainFromOrch(orch, q);
+    const body = JSON.stringify(chain, null, 2);
+    const out = flags.out ?? flags["explain-out"];
     if (out) {
       const dir = out.includes("/") ? out.slice(0, out.lastIndexOf("/")) : ".";
       fs.mkdirSync(dir, { recursive: true });

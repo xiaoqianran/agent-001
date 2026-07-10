@@ -2,7 +2,10 @@ import type { AgentId } from "@gss/contracts";
 import type { TickOrchestrator } from "@gss/runtime";
 import {
   normalizeInstitution,
+  explainFromOrch,
   type InstitutionParams,
+  type ExplainQuery,
+  type EvidenceChain,
 } from "@gss/experiment";
 import type {
   AgentViewDTO,
@@ -112,6 +115,11 @@ export class ControlRoomService {
 
   getAuditLog(): InjectionAudit[] {
     return this.audit.map((a) => structuredClone(a));
+  }
+
+  /** Read-only evidence chain (GOAL-010). Does not mutate world. */
+  explain(query: ExplainQuery): EvidenceChain {
+    return explainFromOrch(this.orch, query);
   }
 
   inject(injection: Injection): InjectionAudit {

@@ -14,6 +14,9 @@ import {
   detectHighlights,
   detectHighlightsFromOrch,
   countHighlightsByKind,
+  explain,
+  explainFromOrch,
+  snapshotFromOrch,
   type ExperimentParams,
   type RunMetrics,
   type DailyMetricSample,
@@ -21,6 +24,8 @@ import {
   type NarrativeHighlight,
   type HighlightKind,
   type HighlightInput,
+  type EvidenceChain,
+  type ExplainQuery,
   parseParamPairs,
   mergeParams,
 } from "@gss/experiment";
@@ -472,6 +477,9 @@ export {
   detectHighlights,
   detectHighlightsFromOrch,
   countHighlightsByKind,
+  explain,
+  explainFromOrch,
+  snapshotFromOrch,
 };
 export type {
   ExperimentParams,
@@ -481,4 +489,6 @@ export type {
   NarrativeHighlight,
   HighlightKind,
   HighlightInput,
+  EvidenceChain,
+  ExplainQuery,
 };

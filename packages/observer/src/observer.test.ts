@@ -40,6 +40,36 @@ describe("observer HTTP", () => {
     expect(world.agents.length).toBe(3);
   });
 
+  it("GET /explain returns EvidenceChain JSON", async () => {
+    const orch = createSimulation({
+      seed: "ex",
+      scenario: "commons-cabin",
+      freeRiderCount: 2,
+    });
+    await orch.runDays(2);
+    const ctx = {
+      orch,
+      control: new ControlRoomService(orch),
+      params: {
+        seed: "ex",
+        scenario: "commons-cabin" as const,
+        days: 2,
+      },
+      allowWrite: false,
+    };
+    const r = await handleObserverRequest(
+      ctx,
+      "GET",
+      "/explain",
+      new URLSearchParams({ highlightKind: "conflict" }),
+    );
+    expect(r.status).toBe(200);
+    const body = JSON.parse(r.body as string);
+    expect(typeof body.found).toBe("boolean");
+    expect(Array.isArray(body.links)).toBe(true);
+    expect(typeof body.summary).toBe("string");
+  });
+
   it("GET /highlights returns JSON array", async () => {
     const orch = createSimulation({
       seed: "hl",
