@@ -214,9 +214,4 @@ pnpm sim explain --scenario commons-cabin --days 3 --seed 42 --from-highlight-ki
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-011 候选：**
-
-1. **实验包 v2**：checkpoint fork + A/B bundle 对比 MD/HTML 报告  
-2. **eval 夹具**：承诺 resume（#1）或谣言-信念（#4）缩小场景  
-3. **Observer 写路径鉴权硬化**（若 010 未做 token）  
-4. **BeliefStore 最小版** + 信息失真 vignette  
+**GOAL-011（已成文）：** [GOAL-011-experiment-fork-report.md](./GOAL-011-experiment-fork-report.md) — 实验分叉 fork + A/B 对照报告（实验包 v2）。  
