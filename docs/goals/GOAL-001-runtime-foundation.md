@@ -168,5 +168,5 @@ llm（Stub + 可选 OpenAI-compatible NewAPI）。
 
 ## 建议的下一条 goal（本 goal 完成后）
 
-**GOAL-002：** MemoryStore（episodic/social/prospective 最小生命周期）+ 2–3 Agent 关系/承诺 + 局部对话通道（阶段 B 入口）。  
-**GOAL-003：** 成本分级、兴趣管理、OpenAI 实网可选集成测试（需密钥环境）。  
+**GOAL-002（已成文）：** [docs/goals/GOAL-002-memory-social-dyad.md](./GOAL-002-memory-social-dyad.md) — MemoryStore + 关系/承诺 + 局部对话 + `dyad-cabin`。  
+**GOAL-003（预告）：** 描述性规范涌现计数 / 稀缺整合场景；成本分级与兴趣管理可选。  

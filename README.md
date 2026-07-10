@@ -45,7 +45,8 @@ pnpm sim compare-seeds --seed 42 --days 2
 
 - [总体设计蓝图](docs/design/generative-social-simulator-blueprint.md)
 - [Git Commit 规范](docs/COMMIT_CONVENTION.md)
-- [GOAL-001 规格](docs/goals/GOAL-001-runtime-foundation.md)
+- [GOAL-001 规格](docs/goals/GOAL-001-runtime-foundation.md)（已完成：运行时地基）
+- [GOAL-002 规格](docs/goals/GOAL-002-memory-social-dyad.md)（下一步：记忆 + 小群体）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 
 ## 核心目标
