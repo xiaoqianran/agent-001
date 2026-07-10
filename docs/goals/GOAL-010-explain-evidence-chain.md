@@ -1,6 +1,8 @@
 # GOAL-010：因果解释 explain + 最小证据链（评估 #7）
 
 > 可直接作为下一条 `/goal` 正文使用（整份粘贴，或：`执行 docs/goals/GOAL-010-explain-evidence-chain.md`）。
+>
+> **状态：已实现（GOAL-010）** — 见 `docs/engineering/explain-evidence-chain.md`。
 
 ---
 
