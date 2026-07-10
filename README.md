@@ -32,3 +32,7 @@ export NEWAPI_BASE_URL="https://your-newapi-host"
 export NEWAPI_API_KEY="sk-..."
 export NEWAPI_MODEL="openai/gpt-oss-120b"
 ```
+
+## 协作约定
+
+- [Git Commit 规范](docs/COMMIT_CONVENTION.md)
