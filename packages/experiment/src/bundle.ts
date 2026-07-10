@@ -19,6 +19,15 @@ export interface GssBundleV1 {
   metrics: RunMetrics;
   dailyMetrics?: DailyMetricSample[];
   checkpointRef?: string;
+  /** GOAL-006 optional extensions (backward compatible) */
+  institutionParams?: import("./institution.js").InstitutionParams;
+  timeline?: Array<{
+    tick: number;
+    type: string;
+    actor?: string;
+    summary: string;
+  }>;
+  auditLog?: Array<Record<string, unknown>>;
 }
 
 export function createBundle(args: {
@@ -26,6 +35,9 @@ export function createBundle(args: {
   metrics: RunMetrics;
   dailyMetrics?: DailyMetricSample[];
   checkpointRef?: string;
+  institutionParams?: import("./institution.js").InstitutionParams;
+  timeline?: GssBundleV1["timeline"];
+  auditLog?: GssBundleV1["auditLog"];
 }): GssBundleV1 {
   return {
     format: "gss-bundle@1",
@@ -35,6 +47,9 @@ export function createBundle(args: {
     metrics: args.metrics,
     dailyMetrics: args.dailyMetrics,
     checkpointRef: args.checkpointRef,
+    institutionParams: args.institutionParams,
+    timeline: args.timeline,
+    auditLog: args.auditLog,
   };
 }
 

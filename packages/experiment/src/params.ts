@@ -1,3 +1,5 @@
+import type { InstitutionParams } from "./institution.js";
+
 export type ScenarioId =
   | "solo-cabin"
   | "dyad-cabin"
@@ -10,7 +12,7 @@ export interface NormThresholdOverride {
   windowTicks?: number;
 }
 
-/** GOAL-004/005 experiment / scenario knobs */
+/** GOAL-004/005/006 experiment / scenario knobs */
 export interface ExperimentParams {
   seed: string;
   scenario: ScenarioId;
@@ -30,6 +32,12 @@ export interface ExperimentParams {
   /** baseline | scarce | abundant | custom | cooperative | free-ride */
   label?: string;
   testNormThresholds?: boolean;
+  /** GOAL-006 nested or flat institution knobs */
+  institution?: InstitutionParams;
+  enforcementStrength?: number;
+  contributionReward?: number;
+  freeRidePenalty?: number;
+  transparency?: boolean;
 }
 
 export function parseParamPairs(
@@ -46,21 +54,30 @@ export function parseParamPairs(
       key === "woodsFood" ||
       key === "days" ||
       key === "initialGranary" ||
-      key === "freeRiderCount"
+      key === "freeRiderCount" ||
+      key === "enforcementStrength" ||
+      key === "contributionReward" ||
+      key === "freeRidePenalty"
     ) {
       out[key] = Number(raw);
     } else if (key === "label" || key === "seed" || key === "scenario") {
       out[key] = raw;
-    } else if (key === "testNormThresholds") {
+    } else if (key === "testNormThresholds" || key === "transparency") {
       out[key] = raw === "1" || raw === "true";
-    } else {
-      // nested normThresholds.tFreq=3
-      if (key.startsWith("normThresholds.")) {
-        const sub = key.slice("normThresholds.".length);
-        const nt = (out.normThresholds as Record<string, number>) ?? {};
-        nt[sub] = Number(raw);
-        out.normThresholds = nt;
+    } else if (key.startsWith("institution.")) {
+      const sub = key.slice("institution.".length);
+      const inst = (out.institution as Record<string, unknown>) ?? {};
+      if (sub === "transparency") {
+        inst[sub] = raw === "1" || raw === "true";
+      } else {
+        inst[sub] = Number(raw);
       }
+      out.institution = inst;
+    } else if (key.startsWith("normThresholds.")) {
+      const sub = key.slice("normThresholds.".length);
+      const nt = (out.normThresholds as Record<string, number>) ?? {};
+      nt[sub] = Number(raw);
+      out.normThresholds = nt;
     }
   }
   return out as Partial<ExperimentParams>;
@@ -77,6 +94,30 @@ export function mergeParams(
       ...base.normThresholds,
       ...override.normThresholds,
     },
+    institution: {
+      ...base.institution,
+      ...override.institution,
+      enforcementStrength:
+        override.enforcementStrength ??
+        override.institution?.enforcementStrength ??
+        base.enforcementStrength ??
+        base.institution?.enforcementStrength,
+      contributionReward:
+        override.contributionReward ??
+        override.institution?.contributionReward ??
+        base.contributionReward ??
+        base.institution?.contributionReward,
+      freeRidePenalty:
+        override.freeRidePenalty ??
+        override.institution?.freeRidePenalty ??
+        base.freeRidePenalty ??
+        base.institution?.freeRidePenalty,
+      transparency:
+        override.transparency ??
+        override.institution?.transparency ??
+        base.transparency ??
+        base.institution?.transparency,
+    },
   };
 }
 
@@ -92,5 +133,23 @@ export function paramsToRecord(p: ExperimentParams): Record<string, unknown> {
     normThresholds: p.normThresholds,
     label: p.label,
     testNormThresholds: p.testNormThresholds,
+    institution: p.institution,
+    enforcementStrength: p.enforcementStrength,
+    contributionReward: p.contributionReward,
+    freeRidePenalty: p.freeRidePenalty,
+    transparency: p.transparency,
+  };
+}
+
+export function institutionFromParams(
+  p: ExperimentParams,
+): import("./institution.js").InstitutionParams {
+  return {
+    enforcementStrength:
+      p.enforcementStrength ?? p.institution?.enforcementStrength,
+    contributionReward:
+      p.contributionReward ?? p.institution?.contributionReward,
+    freeRidePenalty: p.freeRidePenalty ?? p.institution?.freeRidePenalty,
+    transparency: p.transparency ?? p.institution?.transparency,
   };
 }

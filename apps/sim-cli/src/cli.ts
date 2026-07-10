@@ -13,25 +13,25 @@ import {
   type ScenarioId,
 } from "@gss/sim";
 import { computeFingerprint, fingerprintEqual, TickOrchestrator } from "@gss/runtime";
+import { ControlRoomService } from "@gss/control";
 import fs from "node:fs";
 
 function usage(): never {
   console.log(`gss-sim — Generative Social Simulator CLI
 
 Usage:
-  pnpm sim run --scenario commons-cabin --days 5 --seed 42 --metrics-out ./out/m.json
+  pnpm sim run --scenario commons-cabin --days 5 --seed 42 \\
+    --param enforcementStrength=0.9 --timeline-out ./tl.json
   pnpm sim compare-params --scenario commons-cabin --seed 42 --days 5 \\
-    --a freeRiderCount=0 --a label=cooperative \\
-    --b freeRiderCount=2 --b label=free-ride
+    --a enforcementStrength=0 --b enforcementStrength=0.9
+  pnpm sim timeline --from-checkpoint ./ckpts/x.json --out ./tl.json
+  pnpm sim inject --scenario commons-cabin --seed 1 --kind resource --payload '{"granaryDelta":2}'
   pnpm sim export-bundle --scenario commons-cabin --days 5 --seed 42 --out ./bundles/run.json
-  pnpm sim inspect-bundle --in ./bundles/run.json
 
 Options:
-  --scenario solo-cabin|dyad-cabin|trio-cabin|commons-cabin
-  --days --seed --param key=value --label
-  --metrics-out --checkpoint --log
-  --a / --b for compare-params
-  --out / --in for bundle
+  --scenario --days --seed --param key=value --label
+  --metrics-out --timeline-out --checkpoint --log
+  --a / --b --out / --in --kind --payload
 `);
   process.exit(1);
 }
@@ -92,8 +92,34 @@ async function main() {
         label: flags.label ?? partial.label,
         testNormThresholds: partial.testNormThresholds,
         normThresholds: partial.normThresholds,
+        enforcementStrength: partial.enforcementStrength,
+        contributionReward: partial.contributionReward,
+        freeRidePenalty: partial.freeRidePenalty,
+        transparency: partial.transparency,
+        institution: partial.institution,
       },
     });
+    if (flags["timeline-out"]) {
+      const o = createSimulation({
+        seed: summary.seed,
+        scenario: summary.scenario as ScenarioId,
+        freeRiderCount: partial.freeRiderCount,
+        enforcementStrength: partial.enforcementStrength,
+        freeRidePenalty: partial.freeRidePenalty,
+        contributionReward: partial.contributionReward,
+        transparency: partial.transparency,
+        experimentParams: summary.experimentParams as ExperimentParams,
+      });
+      await o.runDays(summary.days);
+      const cr = new ControlRoomService(o);
+      const tl = cr.listTimeline();
+      const outPath = flags["timeline-out"];
+      const dir = outPath.includes("/")
+        ? outPath.slice(0, outPath.lastIndexOf("/"))
+        : ".";
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(outPath, JSON.stringify(tl, null, 2));
+    }
     console.log(JSON.stringify(summary, null, 2));
     process.exit(summary.exitCode);
   }
@@ -128,6 +154,50 @@ async function main() {
       b: { ...b, label: b.label ?? "B" },
     });
     console.log(JSON.stringify(result, null, 2));
+    process.exit(0);
+  }
+
+  if (cmd === "timeline") {
+    const ckpt = flags["from-checkpoint"] ?? flags.checkpoint;
+    if (!ckpt) {
+      console.error("timeline requires --from-checkpoint");
+      process.exit(2);
+    }
+    const bundle = JSON.parse(fs.readFileSync(ckpt, "utf8"));
+    const orch = TickOrchestrator.fromCheckpoint(bundle);
+    const cr = new ControlRoomService(orch);
+    const tl = cr.listTimeline();
+    const out = flags.out ?? flags["timeline-out"];
+    if (out) {
+      const dir = out.includes("/") ? out.slice(0, out.lastIndexOf("/")) : ".";
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(out, JSON.stringify(tl, null, 2));
+    }
+    console.log(JSON.stringify({ count: tl.length, sample: tl.slice(0, 5) }, null, 2));
+    process.exit(0);
+  }
+
+  if (cmd === "inject") {
+    const partial = parseParamPairs(multi.param ?? []);
+    const scenario = (flags.scenario ?? "commons-cabin") as ScenarioId;
+    const orch = createSimulation({
+      seed: flags.seed ?? "42",
+      scenario,
+      freeRiderCount: partial.freeRiderCount,
+      enforcementStrength: partial.enforcementStrength,
+    });
+    await orch.runDays(Number(flags.days ?? "0"));
+    const cr = new ControlRoomService(orch);
+    const kind = (flags.kind ?? "resource") as
+      | "resource"
+      | "oracle_message"
+      | "param"
+      | "event";
+    const payload = flags.payload
+      ? (JSON.parse(flags.payload) as Record<string, unknown>)
+      : { granaryDelta: 1 };
+    const audit = cr.inject({ kind, payload });
+    console.log(JSON.stringify({ audit, world: cr.getWorldView() }, null, 2));
     process.exit(0);
   }
 

@@ -10,15 +10,31 @@ import type {
 } from "@gss/contracts";
 import { cloneWorldState, type WorldState, type AgentBody } from "./types.js";
 
+/** Minimal institution knobs used by World (avoid hard dep on experiment package). */
+export interface WorldInstitution {
+  enforcementStrength?: number;
+  transparency?: boolean;
+}
+
 /**
  * WorldAuthority — sole physical write path for world facts.
  * Cognition/Agent must never hold this writable store; only Runtime does.
  */
 export class WorldAuthority {
   private state: WorldState;
+  private institution: WorldInstitution = {};
 
-  constructor(initial: WorldState) {
+  constructor(initial: WorldState, institution?: WorldInstitution) {
     this.state = cloneWorldState(initial);
+    if (institution) this.institution = { ...institution };
+  }
+
+  setInstitution(inst: WorldInstitution): void {
+    this.institution = { ...this.institution, ...inst };
+  }
+
+  getInstitution(): WorldInstitution {
+    return { ...this.institution };
   }
 
   snapshot(): WorldState {
@@ -117,7 +133,7 @@ export class WorldAuthority {
       .filter((a) => a.placeId === place.id)
       .map((a) => ({ id: a.id, placeId: a.placeId, name: a.name }));
 
-    return {
+    const obs: LocalObservation = {
       tick,
       observer: agentId,
       place: {
@@ -132,6 +148,19 @@ export class WorldAuthority {
       resourcePools,
       selfInventory: { ...agent.inventory },
     };
+    if (this.institution.transparency) {
+      const g = this.state.publicGoods?.granary;
+      if (g) {
+        obs.publicLedger = {
+          goodId: g.id,
+          stock: g.stock,
+          totalContributed: g.totalContributed,
+          totalWithdrawn: g.totalWithdrawn,
+          contributors: { ...g.contributors },
+        };
+      }
+    }
+    return obs;
   }
 
   validate(proposal: ActionProposal): ValidationResult {
@@ -293,6 +322,18 @@ export class WorldAuthority {
         }
         if (actor.carriedMass + qty > actor.carryCapacity) {
           return { ok: false, code: "PRECONDITION", message: "over carry capacity" };
+        }
+        // High enforcement: must have contributed before withdrawing (anti free-ride)
+        const enf = this.institution.enforcementStrength ?? 0;
+        if (enf >= 0.5) {
+          const contributed = good.contributors[actor.id] ?? 0;
+          if (contributed <= 0) {
+            return {
+              ok: false,
+              code: "NO_PERMISSION",
+              message: "enforcement: contribute before withdraw_public",
+            };
+          }
         }
         return { ok: true, code: "OK" };
       }
@@ -534,5 +575,23 @@ export class WorldAuthority {
       producedEvents: events,
       perceptsForActor: percepts,
     };
+  }
+
+  /** Control-room inject: adjust granary stock via authority only */
+  adjustGranaryStock(delta: number, goodId = "granary"): number {
+    const g = this.state.publicGoods?.[goodId];
+    if (!g) throw new Error(`no public good ${goodId}`);
+    g.stock = Math.max(0, g.stock + delta);
+    return g.stock;
+  }
+
+  /** Control-room inject: adjust private pool at place */
+  adjustPool(placeId: string, kind: string, delta: number): number {
+    const pool = Object.values(this.state.entities).find(
+      (e) => e.isPool && e.placeId === placeId && e.kind === kind,
+    );
+    if (!pool) throw new Error(`no pool ${kind} at ${placeId}`);
+    pool.quantity = Math.max(0, pool.quantity + delta);
+    return pool.quantity;
   }
 }

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@gss/sim": "workspace:*",
-    "@gss/runtime": "workspace:*"
+    "@gss/runtime": "workspace:*",
+    "@gss/control": "workspace:*"
   }
 }

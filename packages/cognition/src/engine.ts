@@ -10,6 +10,13 @@ import { clamp01 } from "@gss/agent";
 import type { LlmPort } from "@gss/llm";
 import { StubLlm } from "@gss/llm";
 
+export interface CognitionInstitution {
+  enforcementStrength?: number;
+  contributionReward?: number;
+  freeRidePenalty?: number;
+  transparency?: boolean;
+}
+
 export interface CognitiveEngineOptions {
   llm?: LlmPort;
   /** When true, cognitive tick throws (for fault isolation tests) */
@@ -18,6 +25,7 @@ export interface CognitiveEngineOptions {
    * Role bias:
    * - promisor/promisee: dyad
    * - cooperative / grabber / neutral: trio scarce
+   * - free_rider: commons
    */
   roleHint?:
     | "promisor"
@@ -26,6 +34,7 @@ export interface CognitiveEngineOptions {
     | "cooperative"
     | "grabber"
     | "free_rider";
+  institution?: CognitionInstitution;
 }
 
 /**
@@ -36,15 +45,25 @@ export class RuleCognitiveEngine {
   private readonly llm: LlmPort;
   private forceThrow: boolean;
   private roleHint: NonNullable<CognitiveEngineOptions["roleHint"]>;
+  private institution: CognitionInstitution;
 
   constructor(opts: CognitiveEngineOptions = {}) {
     this.llm = opts.llm ?? new StubLlm();
     this.forceThrow = opts.forceThrow ?? false;
     this.roleHint = opts.roleHint ?? "neutral";
+    this.institution = { ...(opts.institution ?? {}) };
   }
 
   setForceThrow(v: boolean): void {
     this.forceThrow = v;
+  }
+
+  setInstitution(inst: CognitionInstitution): void {
+    this.institution = { ...this.institution, ...inst };
+  }
+
+  getInstitution(): CognitionInstitution {
+    return { ...this.institution };
   }
 
   async tick(
@@ -400,6 +419,21 @@ export class RuleCognitiveEngine {
             o.score += 0.05;
           }
         }
+      }
+    }
+
+    // Institution knobs (GOAL-006)
+    const reward = this.institution.contributionReward ?? 0;
+    const penalty = this.institution.freeRidePenalty ?? 0;
+    const enf = this.institution.enforcementStrength ?? 0;
+    for (const o of options) {
+      if (o.action.verb === "contribute" && o.score >= 0) {
+        o.score += 0.35 * reward;
+      }
+      if (o.action.verb === "withdraw_public" && o.score >= 0) {
+        o.score -= 0.55 * penalty;
+        // strong enforcement also deters free-ride intent cognitively
+        o.score -= 0.4 * enf;
       }
     }
 

@@ -79,6 +79,7 @@ export class TickOrchestrator {
   private readonly cognitionByAgent: Map<string, RuleCognitiveEngine>;
   private readonly defaultCognition: RuleCognitiveEngine;
   private state: SimulationState;
+  private frozen = false;
 
   constructor(args: {
     world: WorldAuthority;
@@ -90,6 +91,12 @@ export class TickOrchestrator {
     memory?: MemoryStore;
     social?: SocialGraph;
     ticksPerDay?: number;
+    institution?: {
+      enforcementStrength?: number;
+      contributionReward?: number;
+      freeRidePenalty?: number;
+      transparency?: boolean;
+    };
   }) {
     this.world = args.world;
     this.bus = new EventBus();
@@ -114,6 +121,38 @@ export class TickOrchestrator {
     this.bus.subscribe((e) => {
       this.state.eventLog.push(e);
     });
+    if (args.institution) {
+      this.applyInstitution(args.institution);
+    }
+  }
+
+  setFrozen(v: boolean): void {
+    this.frozen = v;
+  }
+
+  isFrozen(): boolean {
+    return this.frozen;
+  }
+
+  getBus(): EventBus {
+    return this.bus;
+  }
+
+  /** Push institution knobs into World + all cognitive engines */
+  applyInstitution(inst: {
+    enforcementStrength?: number;
+    contributionReward?: number;
+    freeRidePenalty?: number;
+    transparency?: boolean;
+  }): void {
+    this.world.setInstitution({
+      enforcementStrength: inst.enforcementStrength,
+      transparency: inst.transparency,
+    });
+    this.defaultCognition.setInstitution(inst);
+    for (const eng of this.cognitionByAgent.values()) {
+      eng.setInstitution(inst);
+    }
   }
 
   private eng(agentId: string): RuleCognitiveEngine {
@@ -150,6 +189,17 @@ export class TickOrchestrator {
   }
 
   async advanceOneTick(): Promise<TickResult> {
+    if (this.frozen) {
+      return {
+        tick: this.state.clock.tick,
+        day: this.state.clock.day,
+        orderedAgents: [],
+        applied: [],
+        rejected: [],
+        faults: [],
+        phases: [],
+      };
+    }
     const phases: TickPhase[] = [];
 
     phases.push("clock_advance");

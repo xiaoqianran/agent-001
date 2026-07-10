@@ -17,7 +17,13 @@ import {
   TEST_NORM_THRESHOLDS,
   type NormThresholds,
 } from "@gss/social";
-import type { ExperimentParams, ScenarioId } from "@gss/experiment";
+import {
+  institutionFromParams,
+  normalizeInstitution,
+  type ExperimentParams,
+  type InstitutionParams,
+  type ScenarioId,
+} from "@gss/experiment";
 
 export type { ScenarioId };
 
@@ -35,6 +41,11 @@ export interface CreateSimOptions {
   normThresholds?: Partial<NormThresholds>;
   label?: string;
   experimentParams?: ExperimentParams;
+  institution?: InstitutionParams;
+  enforcementStrength?: number;
+  contributionReward?: number;
+  freeRidePenalty?: number;
+  transparency?: boolean;
 }
 
 function foodOptsFrom(opts: CreateSimOptions): FoodPoolOpts | undefined {
@@ -75,6 +86,24 @@ function mergeOpts(opts: CreateSimOptions): CreateSimOptions {
     testNormThresholds: opts.testNormThresholds ?? ep?.testNormThresholds,
     normThresholds: opts.normThresholds ?? ep?.normThresholds,
     label: opts.label ?? ep?.label,
+    enforcementStrength:
+      opts.enforcementStrength ?? ep?.enforcementStrength,
+    contributionReward: opts.contributionReward ?? ep?.contributionReward,
+    freeRidePenalty: opts.freeRidePenalty ?? ep?.freeRidePenalty,
+    transparency: opts.transparency ?? ep?.transparency,
+    institution: opts.institution ?? ep?.institution,
+  };
+}
+
+function resolveInstitution(o: CreateSimOptions): InstitutionParams {
+  if (o.experimentParams) {
+    return institutionFromParams(o.experimentParams);
+  }
+  return {
+    enforcementStrength: o.enforcementStrength ?? o.institution?.enforcementStrength,
+    contributionReward: o.contributionReward ?? o.institution?.contributionReward,
+    freeRidePenalty: o.freeRidePenalty ?? o.institution?.freeRidePenalty,
+    transparency: o.transparency ?? o.institution?.transparency,
   };
 }
 
@@ -88,26 +117,35 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
   };
   const social = socialFrom(o);
   const food = foodOptsFrom(o);
+  const inst = normalizeInstitution(resolveInstitution(o));
 
   if (scenarioId === "solo-cabin") {
     const agentId = o.agentId ?? "agent-alice";
-    const world = new WorldAuthority(createSoloCabinWorld(agentId, food));
+    const world = new WorldAuthority(createSoloCabinWorld(agentId, food), inst);
     const agent = createAgentState(agentId, "Alice", "cabin");
     return new TickOrchestrator({
       world,
       seed,
       scenarioId,
       agentStates: { [agentId]: agent },
-      cognition: new RuleCognitiveEngine({ llm, roleHint: "neutral" }),
+      cognition: new RuleCognitiveEngine({
+        llm,
+        roleHint: "neutral",
+        institution: inst,
+      }),
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
+      institution: inst,
     });
   }
 
   if (scenarioId === "dyad-cabin") {
     const aliceId = "agent-alice";
     const bobId = "agent-bob";
-    const world = new WorldAuthority(createDyadCabinWorld(aliceId, bobId, food));
+    const world = new WorldAuthority(
+      createDyadCabinWorld(aliceId, bobId, food),
+      inst,
+    );
     const alice = createAgentState(aliceId, "Alice", "cabin");
     const bob = createAgentState(bobId, "Bob", "cabin");
     return new TickOrchestrator({
@@ -119,9 +157,11 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
         new RuleCognitiveEngine({
           llm,
           roleHint: id === aliceId ? "promisor" : "promisee",
+          institution: inst,
         }),
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
+      institution: inst,
     });
   }
 
@@ -131,6 +171,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
     const carolId = "agent-carol";
     const world = new WorldAuthority(
       createTrioCabinWorld(aliceId, bobId, carolId, food),
+      inst,
     );
     const alice = createAgentState(aliceId, "Alice", "cabin");
     const bob = createAgentState(bobId, "Bob", "cabin");
@@ -149,10 +190,15 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
             : id === bobId
               ? "grabber"
               : "neutral";
-        return new RuleCognitiveEngine({ llm, roleHint: role });
+        return new RuleCognitiveEngine({
+          llm,
+          roleHint: role,
+          institution: inst,
+        });
       },
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
+      institution: inst,
     });
   }
 
@@ -166,6 +212,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
         ...food,
         initialGranary: o.initialGranary,
       }),
+      inst,
     );
     const alice = createAgentState(aliceId, "Alice", "cabin");
     const bob = createAgentState(bobId, "Bob", "cabin");
@@ -195,9 +242,14 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       scenarioId,
       agentStates: { [aliceId]: alice, [bobId]: bob, [carolId]: carol },
       cognitionFactory: (id) =>
-        new RuleCognitiveEngine({ llm, roleHint: roleFor(id) }),
+        new RuleCognitiveEngine({
+          llm,
+          roleHint: roleFor(id),
+          institution: inst,
+        }),
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
+      institution: inst,
     });
   }
 

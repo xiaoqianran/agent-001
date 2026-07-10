@@ -142,6 +142,11 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
     normThresholds: params.normThresholds,
     label: params.label,
     experimentParams: params,
+    institution: params.institution,
+    enforcementStrength: params.enforcementStrength,
+    contributionReward: params.contributionReward,
+    freeRidePenalty: params.freeRidePenalty,
+    transparency: params.transparency,
   });
 
   const lines: string[] = [];
