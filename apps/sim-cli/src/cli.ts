@@ -12,6 +12,10 @@ import {
   renderDailyBrief,
   detectHighlightsFromOrch,
   explainFromOrch,
+  forkCompare,
+  warmupAndForkCompare,
+  buildCompareReport,
+  renderReportMarkdown,
   type ExperimentParams,
   type ScenarioId,
   type ExplainQuery,
@@ -19,6 +23,13 @@ import {
 import { computeFingerprint, fingerprintEqual, TickOrchestrator } from "@gss/runtime";
 import { ControlRoomService } from "@gss/control";
 import fs from "node:fs";
+import path from "node:path";
+
+function writeOut(filePath: string, body: string): void {
+  const dir = path.dirname(path.resolve(filePath));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.resolve(filePath), body);
+}
 
 function usage(): never {
   console.log(`gss-sim — Generative Social Simulator CLI
@@ -27,7 +38,14 @@ Usage:
   pnpm sim run --scenario commons-cabin --days 5 --seed 42 \\
     --param enforcementStrength=0.9 --timeline-out ./tl.json
   pnpm sim compare-params --scenario commons-cabin --seed 42 --days 5 \\
-    --a enforcementStrength=0 --b enforcementStrength=0.9
+    --a enforcementStrength=0 --b enforcementStrength=0.9 \\
+    --report-out ./reports/compare.md
+  pnpm sim fork-compare --from-checkpoint ./ckpts/parent.json --days 3 \\
+    --a enforcementStrength=0 --b enforcementStrength=0.9 \\
+    --report-out ./reports/fork.md
+  pnpm sim fork-compare --scenario commons-cabin --seed 42 --warmup-days 2 --days 3 \\
+    --a enforcementStrength=0 --b enforcementStrength=0.9 \\
+    --report-out ./reports/fork-warm.md
   pnpm sim timeline --from-checkpoint ./ckpts/x.json --out ./tl.json
   pnpm sim inject --scenario commons-cabin --seed 1 --kind resource --payload '{"granaryDelta":2}'
   pnpm sim export-bundle --scenario commons-cabin --days 5 --seed 42 --out ./bundles/run.json
@@ -44,7 +62,7 @@ Usage:
 Options:
   --scenario --days --seed --param key=value --label
   --metrics-out --brief-out --highlights-out --timeline-out --checkpoint --log
-  --a / --b --out / --in --kind --payload
+  --a / --b --out / --in --kind --payload --report-out --warmup-days
   --tick --agent --proposal --action-line --from-highlight-kind --from-checkpoint
 `);
   process.exit(1);
@@ -162,14 +180,106 @@ async function main() {
       console.error("compare-params requires --a and --b");
       process.exit(2);
     }
+    const seed = flags.seed ?? "42";
+    const scenario = (flags.scenario ?? "trio-cabin") as ScenarioId;
+    const days = Number(flags.days ?? "5");
     const result = await compareExperimentParams({
-      seed: flags.seed ?? "42",
-      scenario: (flags.scenario ?? "trio-cabin") as ScenarioId,
-      days: Number(flags.days ?? "5"),
+      seed,
+      scenario,
+      days,
       a: { ...a, label: a.label ?? "A" },
       b: { ...b, label: b.label ?? "B" },
     });
+    const reportOut = flags["report-out"];
+    if (reportOut) {
+      const report = buildCompareReport({
+        scenario,
+        seed,
+        daysAfterFork: days,
+        mode: "compare-params",
+        labelA: a.label ?? "A",
+        labelB: b.label ?? "B",
+        paramsA: { ...a, seed, scenario, days },
+        paramsB: { ...b, seed, scenario, days },
+        metricsA: result.a,
+        metricsB: result.b,
+      });
+      writeOut(reportOut, renderReportMarkdown(report));
+    }
     console.log(JSON.stringify(result, null, 2));
+    process.exit(0);
+  }
+
+  if (cmd === "fork-compare") {
+    const a = parseParamPairs(multi.a ?? []);
+    const b = parseParamPairs(multi.b ?? []);
+    if (Object.keys(a).length === 0 || Object.keys(b).length === 0) {
+      console.error("fork-compare requires --a and --b param pairs");
+      process.exit(2);
+    }
+    const days = Number(flags.days ?? "3");
+    const reportOut = flags["report-out"];
+    const ckpt = flags["from-checkpoint"] ?? flags.checkpoint;
+    const warmupDays = flags["warmup-days"]
+      ? Number(flags["warmup-days"])
+      : undefined;
+
+    let result;
+    if (ckpt) {
+      result = await forkCompare({
+        parent: ckpt,
+        days,
+        a: { ...a, label: a.label ?? "A" },
+        b: { ...b, label: b.label ?? "B" },
+      });
+    } else {
+      const scenario = (flags.scenario ?? "commons-cabin") as ScenarioId;
+      const seed = flags.seed ?? "42";
+      const warm = warmupDays ?? 2;
+      result = await warmupAndForkCompare({
+        scenario,
+        seed,
+        warmupDays: warm,
+        days,
+        freeRiderCount:
+          typeof a.freeRiderCount === "number"
+            ? a.freeRiderCount
+            : typeof b.freeRiderCount === "number"
+              ? b.freeRiderCount
+              : 2,
+        initialGranary:
+          typeof a.initialGranary === "number"
+            ? a.initialGranary
+            : typeof b.initialGranary === "number"
+              ? b.initialGranary
+              : 5,
+        a: { ...a, label: a.label ?? "A" },
+        b: { ...b, label: b.label ?? "B" },
+      });
+    }
+
+    if (reportOut) {
+      writeOut(reportOut, result.markdown);
+    }
+    console.log(
+      JSON.stringify(
+        {
+          parentTick: result.parentTick,
+          warmupDays:
+            "warmupDays" in result
+              ? (result as { warmupDays?: number }).warmupDays
+              : undefined,
+          reportPath: reportOut ?? null,
+          format: result.report.format,
+          diff: result.report.diff,
+          notes: result.report.notes,
+          labelA: result.a.label,
+          labelB: result.b.label,
+        },
+        null,
+        2,
+      ),
+    );
     process.exit(0);
   }
 

@@ -17,6 +17,8 @@ import {
   explain,
   explainFromOrch,
   snapshotFromOrch,
+  buildCompareReport,
+  renderReportMarkdown,
   type ExperimentParams,
   type RunMetrics,
   type DailyMetricSample,
@@ -26,6 +28,7 @@ import {
   type HighlightInput,
   type EvidenceChain,
   type ExplainQuery,
+  type ExperimentReport,
   parseParamPairs,
   mergeParams,
 } from "@gss/experiment";
@@ -480,6 +483,8 @@ export {
   explain,
   explainFromOrch,
   snapshotFromOrch,
+  buildCompareReport,
+  renderReportMarkdown,
 };
 export type {
   ExperimentParams,
@@ -491,4 +496,5 @@ export type {
   HighlightInput,
   EvidenceChain,
   ExplainQuery,
+  ExperimentReport,
 };
