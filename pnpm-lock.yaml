@@ -54,6 +54,27 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
 
+  packages/experiment:
+    dependencies:
+      '@gss/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@gss/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@gss/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@gss/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@gss/social':
+        specifier: workspace:*
+        version: link:../social
+      '@gss/world':
+        specifier: workspace:*
+        version: link:../world
+
   packages/llm:
     dependencies:
       '@gss/contracts':
@@ -98,6 +119,9 @@ importers:
       '@gss/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@gss/experiment':
+        specifier: workspace:*
+        version: link:../experiment
       '@gss/llm':
         specifier: workspace:*
         version: link:../llm

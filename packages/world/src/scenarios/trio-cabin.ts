@@ -1,15 +1,17 @@
 import type { WorldState } from "../types.js";
+import { applyFoodPoolOpts, type FoodPoolOpts } from "../resource-opts.js";
 
 /**
- * trio-cabin: 3 agents, scarce food (storehouse 5, woods 2).
+ * trio-cabin: 3 agents, scarce food (storehouse 5, woods 2 by default).
  * Cabin ↔ woods ↔ storehouse.
  */
 export function createTrioCabinWorld(
   aliceId = "agent-alice",
   bobId = "agent-bob",
   carolId = "agent-carol",
+  foodOpts?: FoodPoolOpts,
 ): WorldState {
-  return {
+  const state: WorldState = {
     places: {
       cabin: {
         id: "cabin",
@@ -83,4 +85,5 @@ export function createTrioCabinWorld(
       },
     },
   };
+  return applyFoodPoolOpts(state, foodOpts);
 }

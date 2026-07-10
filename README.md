@@ -12,6 +12,10 @@ pnpm test
 pnpm sim run --scenario solo-cabin --days 7 --seed 42
 pnpm sim run --scenario dyad-cabin --days 5 --seed 42
 pnpm sim run --scenario trio-cabin --days 5 --seed 42
+pnpm sim run --scenario trio-cabin --days 5 --seed 42 \
+  --param storehouseFood=3 --label scarce --metrics-out ./out/m.json
+pnpm sim compare-params --scenario trio-cabin --seed 42 --days 5 \
+  --a storehouseFood=3 --b storehouseFood=20
 ```
 
 断点续跑：
@@ -32,6 +36,7 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [Runtime 地基](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)
+- [实验参数与指标](docs/engineering/experiment-params-metrics.md)
 
 ### 包一览
 
@@ -54,10 +59,11 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [GOAL-001 规格](docs/goals/GOAL-001-runtime-foundation.md)（已完成：运行时地基）
 - [GOAL-002 规格](docs/goals/GOAL-002-memory-social-dyad.md)（已完成：记忆 + 小群体）
 - [GOAL-003 规格](docs/goals/GOAL-003-norms-scarce-trio.md)（已完成：规范涌现 + 三人稀缺）
-- [GOAL-004 规格](docs/goals/GOAL-004-experiment-params-metrics.md)（下一步：实验参数 + 指标对照）
+- [GOAL-004 规格](docs/goals/GOAL-004-experiment-params-metrics.md)（实验参数 + 指标对照）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)
+- [实验参数与指标](docs/engineering/experiment-params-metrics.md)
 
 ## 核心目标
 

@@ -1,11 +1,13 @@
 import type { WorldState } from "../types.js";
+import { applyFoodPoolOpts, type FoodPoolOpts } from "../resource-opts.js";
 
 /** dyad-cabin: Alice + Bob on cabin–woods–storehouse map */
 export function createDyadCabinWorld(
   aliceId = "agent-alice",
   bobId = "agent-bob",
+  foodOpts?: FoodPoolOpts,
 ): WorldState {
-  return {
+  const state: WorldState = {
     places: {
       cabin: {
         id: "cabin",
@@ -69,4 +71,5 @@ export function createDyadCabinWorld(
       },
     },
   };
+  return applyFoodPoolOpts(state, foodOpts);
 }

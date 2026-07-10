@@ -1,8 +1,12 @@
 import type { WorldState } from "../types.js";
+import { applyFoodPoolOpts, type FoodPoolOpts } from "../resource-opts.js";
 
 /** solo-cabin: cabin ↔ woods ↔ storehouse */
-export function createSoloCabinWorld(agentId = "agent-alice"): WorldState {
-  return {
+export function createSoloCabinWorld(
+  agentId = "agent-alice",
+  foodOpts?: FoodPoolOpts,
+): WorldState {
+  const state: WorldState = {
     places: {
       cabin: {
         id: "cabin",
@@ -65,4 +69,5 @@ export function createSoloCabinWorld(agentId = "agent-alice"): WorldState {
       },
     },
   };
+  return applyFoodPoolOpts(state, foodOpts);
 }
