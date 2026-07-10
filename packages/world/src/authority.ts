@@ -212,8 +212,14 @@ export class WorldAuthority {
         }
         return { ok: true, code: "OK" };
       }
-      case "speak":
+      case "speak": {
+        // target optional: if set, must exist; co-location checked at apply for delivery
+        const target = proposal.structured.targetAgentId;
+        if (target && !this.state.agents[target]) {
+          return { ok: false, code: "UNKNOWN_TARGET", message: "speak target missing" };
+        }
         return { ok: true, code: "OK" };
+      }
       case "work": {
         // produce food at woods or store
         if (!["woods", "storehouse"].includes(actor.placeId) && actor.placeId !== "cabin") {
@@ -318,7 +324,8 @@ export class WorldAuthority {
         break;
       }
       case "speak": {
-        percepts.push(`spoke:${proposal.utterance ?? ""}`);
+        const intent = String(proposal.structured.args?.intent ?? "inform");
+        percepts.push(`spoke:${intent}:${proposal.utterance ?? ""}`);
         break;
       }
       case "work": {
@@ -361,17 +368,71 @@ export class WorldAuthority {
       },
     ];
 
-    if (verb === "speak" && proposal.utterance) {
-      // deliver to co-located agents
-      for (const other of Object.values(this.state.agents)) {
-        if (other.id !== actor.id && other.placeId === actor.placeId) {
+    if (verb === "speak") {
+      const intent = String(proposal.structured.args?.intent ?? "inform");
+      const text = proposal.utterance ?? "";
+      const explicitTarget = proposal.structured.targetAgentId;
+      const candidates = explicitTarget
+        ? [this.state.agents[explicitTarget]].filter(Boolean)
+        : Object.values(this.state.agents).filter((o) => o.id !== actor.id);
+
+      if (explicitTarget && !this.state.agents[explicitTarget]) {
+        events.push({
+          type: "message.undelivered",
+          tick,
+          messageId: `msg-${proposal.id}-x`,
+          from: actor.id,
+          to: explicitTarget,
+          reason: "no_target",
+        });
+      } else {
+        for (const other of candidates) {
+          if (!other || other.id === actor.id) continue;
+          if (other.placeId === actor.placeId) {
+            events.push({
+              type: "message.delivered",
+              tick,
+              messageId: `msg-${proposal.id}-${other.id}`,
+              from: actor.id,
+              to: other.id,
+              text,
+              intent,
+              coLocated: true,
+            });
+            percepts.push(`delivered:${other.id}:${intent}`);
+          } else if (explicitTarget) {
+            events.push({
+              type: "message.undelivered",
+              tick,
+              messageId: `msg-${proposal.id}-${other.id}`,
+              from: actor.id,
+              to: other.id,
+              reason: "not_co_located",
+            });
+            percepts.push(`undelivered:${other.id}:not_co_located`);
+          }
+        }
+      }
+
+      // promise speech also emits promise.made when intent=promise and co-located delivery succeeded
+      if (intent === "promise" && explicitTarget) {
+        const delivered = events.some(
+          (e) => e.type === "message.delivered" && e.to === explicitTarget,
+        );
+        if (delivered) {
+          const content =
+            String(proposal.structured.args?.promiseContent ?? text) ||
+            `promise to ${explicitTarget}`;
+          const promiseId = `prom-${proposal.id}`;
           events.push({
-            type: "message.delivered",
+            type: "promise.made",
             tick,
-            messageId: `msg-${proposal.id}-${other.id}`,
-            to: other.id,
-            text: proposal.utterance,
+            promiseId,
+            from: actor.id,
+            to: explicitTarget,
+            content,
           });
+          percepts.push(`promise_made:${promiseId}`);
         }
       }
     }

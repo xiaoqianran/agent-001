@@ -1,19 +1,25 @@
 #!/usr/bin/env node
-import { runSimulation, resumeSimulation } from "@gss/sim";
-import { createSoloCabinSimulation } from "@gss/sim";
+import {
+  runSimulation,
+  resumeSimulation,
+  createSimulation,
+  createSoloCabinSimulation,
+} from "@gss/sim";
 import { computeFingerprint, fingerprintEqual } from "@gss/runtime";
 
 function usage(): never {
-  console.log(`gss-sim — Generative Social Simulator CLI (GOAL-001)
+  console.log(`gss-sim — Generative Social Simulator CLI
 
 Usage:
   pnpm sim run --scenario solo-cabin --days 7 --seed 42
-  pnpm sim run --scenario solo-cabin --days 3 --seed 42 --checkpoint ./ckpts/a.json
-  pnpm sim resume --checkpoint ./ckpts/a.json --days 4
-  pnpm sim fingerprint --seed 42 --days 2   # print authority fingerprint
+  pnpm sim run --scenario dyad-cabin --days 5 --seed 42
+  pnpm sim run --scenario dyad-cabin --days 2 --seed 42 --checkpoint ./ckpts/d.json
+  pnpm sim resume --checkpoint ./ckpts/d.json --days 3
+  pnpm sim compare-seeds --scenario dyad-cabin --seed 42 --days 5
+  pnpm sim fingerprint --scenario dyad-cabin --seed 42 --days 2
 
 Options:
-  --scenario <id>     default solo-cabin
+  --scenario <id>     solo-cabin | dyad-cabin
   --days <n>
   --seed <value>
   --checkpoint <path>
@@ -29,7 +35,8 @@ function parseArgs(argv: string[]) {
     const a = argv[i]!;
     if (a.startsWith("--")) {
       const key = a.slice(2);
-      const val = argv[i + 1] && !argv[i + 1]!.startsWith("--") ? argv[++i]! : "true";
+      const val =
+        argv[i + 1] && !argv[i + 1]!.startsWith("--") ? argv[++i]! : "true";
       out[key] = val;
     } else {
       positionals.push(a);
@@ -71,7 +78,8 @@ async function main() {
   if (cmd === "fingerprint") {
     const days = Number(flags.days ?? "1");
     const seed = flags.seed ?? "42";
-    const orch = createSoloCabinSimulation({ seed });
+    const scenario = (flags.scenario ?? "solo-cabin") as "solo-cabin" | "dyad-cabin";
+    const orch = createSimulation({ seed, scenario });
     await orch.runDays(days);
     const agents = orch.getSimulationState().agents;
     const fp = computeFingerprint(
@@ -79,17 +87,19 @@ async function main() {
       agents,
       orch.getClock(),
       orch.getActionSequence(),
+      orch.getMemory(),
+      orch.getSocial(),
     );
     console.log(JSON.stringify(fp, null, 2));
     process.exit(0);
   }
 
   if (cmd === "compare-seeds") {
-    // internal helper: two runs same seed
     const days = Number(flags.days ?? "2");
     const seed = flags.seed ?? "42";
-    const a = createSoloCabinSimulation({ seed });
-    const b = createSoloCabinSimulation({ seed });
+    const scenario = (flags.scenario ?? "solo-cabin") as "solo-cabin" | "dyad-cabin";
+    const a = createSimulation({ seed, scenario });
+    const b = createSimulation({ seed, scenario });
     await a.runDays(days);
     await b.runDays(days);
     const fa = computeFingerprint(
@@ -97,18 +107,23 @@ async function main() {
       a.getSimulationState().agents,
       a.getClock(),
       a.getActionSequence(),
+      a.getMemory(),
+      a.getSocial(),
     );
     const fb = computeFingerprint(
       b.world,
       b.getSimulationState().agents,
       b.getClock(),
       b.getActionSequence(),
+      b.getMemory(),
+      b.getSocial(),
     );
     const ok = fingerprintEqual(fa, fb);
     console.log(JSON.stringify({ equal: ok, fa, fb }, null, 2));
     process.exit(ok ? 0 : 1);
   }
 
+  void createSoloCabinSimulation;
   usage();
 }
 

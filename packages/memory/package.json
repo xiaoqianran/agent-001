@@ -1,5 +1,5 @@
 {
-  "name": "@gss/runtime",
+  "name": "@gss/memory",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,11 +17,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@gss/contracts": "workspace:*",
-    "@gss/world": "workspace:*",
-    "@gss/agent": "workspace:*",
-    "@gss/cognition": "workspace:*",
-    "@gss/memory": "workspace:*",
-    "@gss/social": "workspace:*"
+    "@gss/contracts": "workspace:*"
   }
 }

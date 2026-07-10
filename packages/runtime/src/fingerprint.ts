@@ -2,12 +2,16 @@ import { hash32, type AuthorityFingerprint } from "@gss/contracts";
 import type { WorldAuthority } from "@gss/world";
 import type { AgentState } from "@gss/agent";
 import type { SimClock, Seed } from "@gss/contracts";
+import type { MemoryStore } from "@gss/memory";
+import type { SocialGraph } from "@gss/social";
 
 export function computeFingerprint(
   world: WorldAuthority,
   agents: Record<string, AgentState>,
   clock: SimClock,
   actionSequence: string[],
+  memory?: MemoryStore,
+  social?: SocialGraph,
 ): AuthorityFingerprint {
   const needs: Record<string, Record<string, number>> = {};
   for (const [id, a] of Object.entries(agents)) {
@@ -21,6 +25,10 @@ export function computeFingerprint(
     resourceTotals: world.resourceTotals(),
     actionSequenceHash: hash32(seq).toString(16),
     needs,
+    memoryDigest: memory
+      ? hash32(memory.digest()).toString(16)
+      : undefined,
+    socialDigest: social ? hash32(social.digest()).toString(16) : undefined,
   };
 }
 
@@ -43,11 +51,17 @@ function stable(fp: AuthorityFingerprint): unknown {
         .sort(([x], [y]) => x.localeCompare(y))
         .map(([k, v]) => [k, sortObj(v as Record<string, number>)]),
     ),
+    memoryDigest: fp.memoryDigest ?? "",
+    socialDigest: fp.socialDigest ?? "",
   };
 }
 
-function sortObj(o: Record<string, string | number>): Record<string, string | number> {
-  return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+function sortObj(
+  o: Record<string, string | number>,
+): Record<string, string | number> {
+  return Object.fromEntries(
+    Object.entries(o).sort(([a], [b]) => a.localeCompare(b)),
+  );
 }
 
 export function seedLabel(seed: Seed): string {

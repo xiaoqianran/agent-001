@@ -10,22 +10,26 @@
 pnpm install
 pnpm test
 pnpm sim run --scenario solo-cabin --days 7 --seed 42
+pnpm sim run --scenario dyad-cabin --days 5 --seed 42
 ```
 
 断点续跑：
 
 ```bash
-pnpm sim run --scenario solo-cabin --days 3 --seed 42 --checkpoint ./ckpts/a.json --log ./logs/run.jsonl
-pnpm sim resume --checkpoint ./ckpts/a.json --days 4
+pnpm sim run --scenario dyad-cabin --days 2 --seed 42 --checkpoint ./ckpts/d.json
+pnpm sim resume --checkpoint ./ckpts/d.json --days 3
 ```
 
 同 seed 确定性比对：
 
 ```bash
-pnpm sim compare-seeds --seed 42 --days 2
+pnpm sim compare-seeds --scenario dyad-cabin --seed 42 --days 5
 ```
 
-工程说明：[docs/engineering/runtime-foundation.md](docs/engineering/runtime-foundation.md)
+工程说明：
+
+- [Runtime 地基](docs/engineering/runtime-foundation.md)
+- [记忆与小群体](docs/engineering/memory-social-dyad.md)
 
 ### 包一览
 

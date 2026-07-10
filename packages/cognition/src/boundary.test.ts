@@ -34,4 +34,11 @@ describe("package dependency boundary", () => {
       expect(text).not.toMatch(/WorldAuthority/);
     }
   });
+
+  it("memory package does not depend on @gss/world", () => {
+    const memPkg = JSON.parse(
+      fs.readFileSync(path.resolve(here, "../../memory/package.json"), "utf8"),
+    ) as { dependencies?: Record<string, string> };
+    expect(memPkg.dependencies?.["@gss/world"]).toBeUndefined();
+  });
 });

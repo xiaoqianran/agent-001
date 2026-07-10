@@ -3,6 +3,14 @@ import type { ActionId, ActionType, AgentId, EntityId, PlaceId, Tick, Validation
 
 export type ActionMutexSlot = "locomotion" | "manual" | "speech" | "rest" | "observe";
 
+/** Speech / social intent (GOAL-002) */
+export type SpeechIntent =
+  | "inform"
+  | "request"
+  | "promise"
+  | "thank"
+  | "refuse";
+
 export interface StructuredAction {
   verb: ActionType;
   targetPlaceId?: PlaceId;
@@ -12,7 +20,12 @@ export interface StructuredAction {
   quantity?: number;
   visibility?: VisibilityClass;
   mutexSlots: ActionMutexSlot[];
-  args?: Record<string, unknown>;
+  /** e.g. speech intent, dueTick, promise content */
+  args?: Record<string, unknown> & {
+    intent?: SpeechIntent;
+    dueTick?: number;
+    promiseContent?: string;
+  };
 }
 
 export interface ActionProposal {
@@ -67,8 +80,37 @@ export type DomainEventLite =
       type: "message.delivered";
       tick: Tick;
       messageId: string;
+      from: AgentId;
       to: AgentId;
       text: string;
+      intent?: string;
+      coLocated: boolean;
+    }
+  | {
+      type: "message.undelivered";
+      tick: Tick;
+      messageId: string;
+      from: AgentId;
+      to: AgentId;
+      reason: "not_co_located" | "no_target";
+    }
+  | {
+      type: "promise.made";
+      tick: Tick;
+      promiseId: string;
+      from: AgentId;
+      to: AgentId;
+      content: string;
+    }
+  | {
+      type: "promise.kept";
+      tick: Tick;
+      promiseId: string;
+    }
+  | {
+      type: "promise.broken";
+      tick: Tick;
+      promiseId: string;
     }
   | {
       type: "agent.fault";

@@ -60,6 +60,12 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/memory:
+    dependencies:
+      '@gss/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/runtime:
     dependencies:
       '@gss/agent':
@@ -71,6 +77,12 @@ importers:
       '@gss/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@gss/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@gss/social':
+        specifier: workspace:*
+        version: link:../social
       '@gss/world':
         specifier: workspace:*
         version: link:../world
@@ -89,12 +101,24 @@ importers:
       '@gss/llm':
         specifier: workspace:*
         version: link:../llm
+      '@gss/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@gss/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@gss/social':
+        specifier: workspace:*
+        version: link:../social
       '@gss/world':
         specifier: workspace:*
         version: link:../world
+
+  packages/social:
+    dependencies:
+      '@gss/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/world:
     dependencies:

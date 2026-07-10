@@ -16,6 +16,9 @@ export interface CheckpointBundle {
   eventLog: DomainEventLite[];
   actionSequence: string[];
   fingerprint?: string;
+  /** GOAL-002 */
+  memory?: unknown;
+  social?: unknown;
 }
 
 export interface AuthorityFingerprint {
@@ -25,4 +28,7 @@ export interface AuthorityFingerprint {
   resourceTotals: Record<string, number>;
   actionSequenceHash: string;
   needs: Record<string, Record<string, number>>;
+  /** optional digests for multi-agent social runs */
+  memoryDigest?: string;
+  socialDigest?: string;
 }

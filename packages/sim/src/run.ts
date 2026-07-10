@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { CheckpointBundle } from "@gss/contracts";
+import { RuleCognitiveEngine } from "@gss/cognition";
 import { TickOrchestrator } from "@gss/runtime";
 import { computeFingerprint } from "@gss/runtime";
-import { createSoloCabinSimulation } from "./create.js";
+import { createSimulation, type ScenarioId } from "./create.js";
 
 export interface RunOptions {
   scenario: string;
@@ -20,18 +21,23 @@ export interface RunSummary {
   days: number;
   finalTick: number;
   finalDay: number;
-  agentId: string;
-  placeId: string;
+  agentIds: string[];
+  places: Record<string, string>;
   fingerprint: ReturnType<typeof computeFingerprint>;
+  promiseCount: number;
+  memoryCount: number;
   checkpointPath?: string;
   logPath?: string;
+  agentId: string;
+  placeId: string;
 }
 
 export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
-  if (opts.scenario !== "solo-cabin") {
+  const scenario = opts.scenario as ScenarioId;
+  if (scenario !== "solo-cabin" && scenario !== "dyad-cabin") {
     throw new Error(`unsupported scenario: ${opts.scenario}`);
   }
-  const orch = createSoloCabinSimulation({ seed: opts.seed, scenario: "solo-cabin" });
+  const orch = createSimulation({ seed: opts.seed, scenario });
   const lines: string[] = [];
 
   const results = await orch.runDays(opts.days);
@@ -48,34 +54,48 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
     );
   }
 
+  return finalize(orch, opts, lines);
+}
+
+function finalize(
+  orch: TickOrchestrator,
+  opts: {
+    days: number;
+    seed: string;
+    scenario: string;
+    checkpointPath?: string;
+    logPath?: string;
+  },
+  lines: string[],
+): RunSummary {
   const agents = orch.getSimulationState().agents;
-  const agentId = Object.keys(agents)[0]!;
-  const placeId = agents[agentId]!.placeId;
+  const agentIds = Object.keys(agents);
+  const places: Record<string, string> = {};
+  for (const id of agentIds) {
+    places[id] = agents[id]!.placeId;
+  }
   const clock = orch.getClock();
   const fingerprint = computeFingerprint(
     orch.world,
     agents,
     clock,
     orch.getActionSequence(),
+    orch.getMemory(),
+    orch.getSocial(),
   );
 
   let checkpointPath = opts.checkpointPath;
   if (checkpointPath) {
     const abs = path.resolve(checkpointPath);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
-    const bundle = orch.toCheckpoint(path.basename(abs));
-    fs.writeFileSync(abs, JSON.stringify(bundle, null, 2));
+    fs.writeFileSync(
+      abs,
+      JSON.stringify(orch.toCheckpoint(path.basename(abs)), null, 2),
+    );
     checkpointPath = abs;
   }
 
   let logPath = opts.logPath;
-  if (logPath) {
-    const abs = path.resolve(logPath);
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, lines.join("\n") + "\n");
-    logPath = abs;
-  }
-
   const summary: RunSummary = {
     exitCode: 0,
     seed: opts.seed,
@@ -83,15 +103,23 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
     days: opts.days,
     finalTick: clock.tick,
     finalDay: clock.day,
-    agentId,
-    placeId,
+    agentIds,
+    places,
     fingerprint,
+    promiseCount: orch.getSocial().listPromises().length,
+    memoryCount: orch.getMemory().count(),
     checkpointPath,
     logPath,
+    agentId: agentIds[0]!,
+    placeId: places[agentIds[0]!]!,
   };
-  lines.push(JSON.stringify({ type: "summary", ...summary, fingerprint }));
+
+  lines.push(JSON.stringify({ type: "summary", ...summary }));
   if (logPath) {
-    fs.appendFileSync(logPath, JSON.stringify({ type: "summary", ...summary }) + "\n");
+    const abs = path.resolve(logPath);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, lines.join("\n") + "\n");
+    summary.logPath = abs;
   }
   return summary;
 }
@@ -103,7 +131,16 @@ export async function resumeSimulation(opts: {
 }): Promise<RunSummary> {
   const raw = fs.readFileSync(path.resolve(opts.checkpointPath), "utf8");
   const bundle = JSON.parse(raw) as CheckpointBundle;
-  const orch = TickOrchestrator.fromCheckpoint(bundle);
+
+  const factory =
+    bundle.scenarioId === "dyad-cabin"
+      ? (id: string) =>
+          new RuleCognitiveEngine({
+            roleHint: id === "agent-alice" ? "promisor" : "promisee",
+          })
+      : undefined;
+
+  const orch = TickOrchestrator.fromCheckpoint(bundle, undefined, factory);
   const startTick = orch.getClock().tick;
 
   const results = await orch.runDays(opts.days);
@@ -118,41 +155,26 @@ export async function resumeSimulation(opts: {
     }),
   );
 
-  const agents = orch.getSimulationState().agents;
-  const agentId = Object.keys(agents)[0]!;
-  const placeId = agents[agentId]!.placeId;
-  const clock = orch.getClock();
-  const fingerprint = computeFingerprint(
-    orch.world,
-    agents,
-    clock,
-    orch.getActionSequence(),
-  );
-
-  // write updated checkpoint next to old
-  const outCkpt = opts.checkpointPath.replace(/\.json$/, "") + ".resumed.json";
-  fs.writeFileSync(outCkpt, JSON.stringify(orch.toCheckpoint(path.basename(outCkpt)), null, 2));
-
-  if (opts.logPath) {
-    fs.mkdirSync(path.dirname(path.resolve(opts.logPath)), { recursive: true });
-    fs.writeFileSync(path.resolve(opts.logPath), lines.join("\n") + "\n");
-  }
-
-  if (clock.tick <= startTick) {
+  if (orch.getClock().tick <= startTick) {
     throw new Error("clock did not advance on resume");
   }
 
-  return {
-    exitCode: 0,
-    seed: bundle.seed.value,
-    scenario: bundle.scenarioId,
-    days: opts.days,
-    finalTick: clock.tick,
-    finalDay: clock.day,
-    agentId,
-    placeId,
-    fingerprint,
-    checkpointPath: outCkpt,
-    logPath: opts.logPath,
-  };
+  const outCkpt =
+    opts.checkpointPath.replace(/\.json$/, "") + ".resumed.json";
+  fs.writeFileSync(
+    outCkpt,
+    JSON.stringify(orch.toCheckpoint(path.basename(outCkpt)), null, 2),
+  );
+
+  return finalize(
+    orch,
+    {
+      days: opts.days,
+      seed: bundle.seed.value,
+      scenario: bundle.scenarioId,
+      checkpointPath: outCkpt,
+      logPath: opts.logPath,
+    },
+    lines,
+  );
 }

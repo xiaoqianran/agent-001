@@ -15,6 +15,8 @@ export default defineConfig({
       "@gss/cognition": path.resolve(__dirname, "packages/cognition/src/index.ts"),
       "@gss/llm": path.resolve(__dirname, "packages/llm/src/index.ts"),
       "@gss/sim": path.resolve(__dirname, "packages/sim/src/index.ts"),
+      "@gss/memory": path.resolve(__dirname, "packages/memory/src/index.ts"),
+      "@gss/social": path.resolve(__dirname, "packages/social/src/index.ts"),
     },
   },
 });

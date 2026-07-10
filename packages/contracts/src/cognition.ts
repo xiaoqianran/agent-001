@@ -54,11 +54,46 @@ export interface CognitiveBudget {
   tier: "reactive" | "deliberative" | "deep";
 }
 
+/** Read-only social context injected by runtime (GOAL-002) */
+export interface SocialContextLite {
+  relations: Array<{
+    other: AgentId;
+    affinity: number;
+    trust: number;
+    debt: number;
+    type: string;
+  }>;
+  pendingPromisesAsPromisor: Array<{
+    id: string;
+    to: AgentId;
+    content: string;
+    itemKind?: string;
+    quantity?: number;
+    dueTick?: number;
+  }>;
+  pendingPromisesAsPromisee: Array<{
+    id: string;
+    from: AgentId;
+    content: string;
+  }>;
+}
+
+export interface RetrievedMemoryLite {
+  id: string;
+  kind: string;
+  summary: string;
+  importance: number;
+  tags: string[];
+}
+
 export interface CognitiveTickInput {
   agentId: AgentId;
   observation: LocalObservation;
   clock: SimClock;
   budget: CognitiveBudget;
+  /** optional GOAL-002 */
+  social?: SocialContextLite;
+  memories?: RetrievedMemoryLite[];
 }
 
 export interface AgentInternalPatch {

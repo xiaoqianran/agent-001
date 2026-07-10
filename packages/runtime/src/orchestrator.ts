@@ -17,6 +17,8 @@ import {
   type AgentState,
 } from "@gss/agent";
 import { RuleCognitiveEngine } from "@gss/cognition";
+import { MemoryStore } from "@gss/memory";
+import { SocialGraph } from "@gss/social";
 import { EventBus } from "./event-bus.js";
 import { computeFingerprint } from "./fingerprint.js";
 
@@ -29,10 +31,10 @@ export type TickPhase =
   | "collect_proposals"
   | "validate_apply_serial"
   | "emit_events"
+  | "social_memory_reduce"
   | "feedback_encode"
   | "tick_complete";
 
-/** Documented GOAL-001 phase subset of blueprint 0–12 */
 export const TICK_PHASES: TickPhase[] = [
   "clock_advance",
   "clear_mutex",
@@ -42,6 +44,7 @@ export const TICK_PHASES: TickPhase[] = [
   "collect_proposals",
   "validate_apply_serial",
   "emit_events",
+  "social_memory_reduce",
   "feedback_encode",
   "tick_complete",
 ];
@@ -66,10 +69,15 @@ export interface TickResult {
   phases: TickPhase[];
 }
 
+export type CognitionFactory = (agentId: string) => RuleCognitiveEngine;
+
 export class TickOrchestrator {
   readonly world: WorldAuthority;
   readonly bus: EventBus;
-  readonly cognition: RuleCognitiveEngine;
+  readonly memory: MemoryStore;
+  readonly social: SocialGraph;
+  private readonly cognitionByAgent: Map<string, RuleCognitiveEngine>;
+  private readonly defaultCognition: RuleCognitiveEngine;
   private state: SimulationState;
 
   constructor(args: {
@@ -78,11 +86,22 @@ export class TickOrchestrator {
     scenarioId: string;
     agentStates: Record<string, AgentState>;
     cognition?: RuleCognitiveEngine;
+    cognitionFactory?: CognitionFactory;
+    memory?: MemoryStore;
+    social?: SocialGraph;
     ticksPerDay?: number;
   }) {
     this.world = args.world;
     this.bus = new EventBus();
-    this.cognition = args.cognition ?? new RuleCognitiveEngine();
+    this.memory = args.memory ?? new MemoryStore();
+    this.social = args.social ?? new SocialGraph();
+    this.defaultCognition = args.cognition ?? new RuleCognitiveEngine();
+    this.cognitionByAgent = new Map();
+    if (args.cognitionFactory) {
+      for (const id of Object.keys(args.agentStates)) {
+        this.cognitionByAgent.set(id, args.cognitionFactory(id));
+      }
+    }
     this.state = {
       seed: args.seed,
       clock: createClock(args.ticksPerDay ?? 24),
@@ -95,6 +114,15 @@ export class TickOrchestrator {
     this.bus.subscribe((e) => {
       this.state.eventLog.push(e);
     });
+  }
+
+  private eng(agentId: string): RuleCognitiveEngine {
+    return this.cognitionByAgent.get(agentId) ?? this.defaultCognition;
+  }
+
+  /** @deprecated use eng; kept for tests that set forceThrow on single engine */
+  get cognition(): RuleCognitiveEngine {
+    return this.defaultCognition;
   }
 
   getSimulationState(): SimulationState {
@@ -113,31 +141,37 @@ export class TickOrchestrator {
     return [...this.state.actionSequence];
   }
 
-  /**
-   * Phases (stable order):
-   * clock_advance → clear_mutex → order_agents → observe → cognitive_tick
-   * → collect_proposals → validate_apply_serial → emit_events → feedback_encode → tick_complete
-   */
+  getMemory(): MemoryStore {
+    return this.memory;
+  }
+
+  getSocial(): SocialGraph {
+    return this.social;
+  }
+
   async advanceOneTick(): Promise<TickResult> {
     const phases: TickPhase[] = [];
 
-    // 1 clock_advance
     phases.push("clock_advance");
     this.state.clock = advanceClock(this.state.clock, 1);
 
-    // 2 clear mutex from previous tick
     phases.push("clear_mutex");
     this.world.clearAllMutex();
 
-    // 3 order agents
+    // nightly-ish decay
+    if (this.state.clock.hourInDay === 0) {
+      this.memory.decay(this.state.clock.tick);
+    }
+
     phases.push("order_agents");
-    const ids = this.world.listAgentIds().filter((id) => this.state.agents[id]?.lifecycle === "active");
+    const ids = this.world
+      .listAgentIds()
+      .filter((id) => this.state.agents[id]?.lifecycle === "active");
     const ordered = agentOrder(this.state.seed, this.state.clock.tick, ids);
 
     const proposals: ActionProposal[] = [];
     const faults: TickResult["faults"] = [];
 
-    // 4–5 observe + cognitive_tick (think sequential for determinism)
     phases.push("observe", "cognitive_tick");
     for (const agentId of ordered) {
       let agent = this.state.agents[agentId];
@@ -147,13 +181,60 @@ export class TickOrchestrator {
 
       try {
         const observation = this.world.observe(agentId, this.state.clock.tick);
-        // mirror place
         agent.placeId = observation.place.id;
-        const out = await this.cognition.tick(agent, {
+
+        const slice = this.social.getSlice(agentId);
+        const social = {
+          relations: slice.relations.map((r) => ({
+            other: r.other,
+            affinity: r.dimensions.affinity,
+            trust: r.dimensions.trust,
+            debt: r.dimensions.debt,
+            type: r.type,
+          })),
+          pendingPromisesAsPromisor: slice.pendingPromisesAsPromisor.map((p) => ({
+            id: p.id,
+            to: p.to,
+            content: p.content,
+            itemKind: p.itemKind,
+            quantity: p.quantity,
+            dueTick: p.dueTick,
+          })),
+          pendingPromisesAsPromisee: slice.pendingPromisesAsPromisee.map((p) => ({
+            id: p.id,
+            from: p.from,
+            content: p.content,
+          })),
+        };
+
+        const memHits = this.memory.retrieve({
+          owner: agentId,
+          tick: this.state.clock.tick,
+          text: "promise food debt give",
+          k: 5,
+        });
+        // if empty but we have any memories, still pull top by importance
+        const memories =
+          memHits.length > 0
+            ? memHits
+            : this.memory
+                .listFor(agentId)
+                .sort((a, b) => b.importance - a.importance)
+                .slice(0, 3);
+
+        const out = await this.eng(agentId).tick(agent, {
           agentId,
           observation,
           clock: this.state.clock,
           budget: { maxTokens: 0, tier: "reactive" },
+          social,
+          memories: memories.map((m) => ({
+            id: m.id,
+            kind: m.kind,
+            summary: m.summary,
+            importance: m.importance,
+            tags: m.tags,
+          })),
         });
         this.state.traces.push(out.decisionTrace);
         if (out.internalUpdates) {
@@ -168,30 +249,30 @@ export class TickOrchestrator {
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         faults.push({ agentId, message });
-        const faultEvent: DomainEventLite = {
+        this.bus.publish({
           type: "agent.fault",
           tick: this.state.clock.tick,
           agentId,
           error: { message, code: "cognitive_fault", recoverable: true },
-        };
-        this.bus.publish(faultEvent);
+        });
       }
     }
 
-    // 6 collect
     phases.push("collect_proposals");
-
-    // 7 serial validate+apply in same order as proposals collected (agent order)
     phases.push("validate_apply_serial");
     const applied: string[] = [];
     const rejected: string[] = [];
-    // sort proposals by agent order for stability
     proposals.sort((a, b) => ordered.indexOf(a.actor) - ordered.indexOf(b.actor));
 
     for (const proposal of proposals) {
       const result = this.world.apply(proposal, this.state.clock.tick);
-      // 8 emit
+      if (!phases.includes("emit_events")) phases.push("emit_events");
       this.bus.publishAll(result.producedEvents);
+
+      // social + memory reduce from world events
+      if (!phases.includes("social_memory_reduce")) phases.push("social_memory_reduce");
+      this.reduceWorldEvents(result.producedEvents, proposal);
+
       if (result.failureCode) {
         rejected.push(proposal.id);
         this.state.actionSequence.push(
@@ -202,25 +283,51 @@ export class TickOrchestrator {
         this.state.actionSequence.push(
           `${this.state.clock.tick}:${proposal.actor}:${proposal.structured.verb}:OK`,
         );
-        // 9 feedback
         const agent = this.state.agents[proposal.actor];
         if (agent) {
-          this.state.agents[proposal.actor] = this.cognition.applyFeedback(
+          this.state.agents[proposal.actor] = this.eng(proposal.actor).applyFeedback(
             agent,
             result.perceptsForActor ?? [],
           );
-          // sync place from world
           const body = this.world.getAgent(proposal.actor);
           if (body) {
             this.state.agents[proposal.actor].placeId = body.placeId;
           }
         }
+        // episodic encode for actor
+        this.memory.encode({
+          owner: proposal.actor,
+          kind: "episodic",
+          summary: `${proposal.structured.verb} ${(result.perceptsForActor ?? []).join(" ")}`,
+          tick: this.state.clock.tick,
+          tags: [proposal.structured.verb],
+          importance: 0.4,
+        });
       }
     }
 
-    phases.push("emit_events", "feedback_encode");
+    // break overdue promises
+    for (const p of this.social.listPromises()) {
+      if (
+        p.status === "pending" &&
+        p.dueTick !== undefined &&
+        this.state.clock.tick > p.dueTick
+      ) {
+        const { memoryHints } = this.social.reduce({
+          type: "promise.broken",
+          tick: this.state.clock.tick,
+          promiseId: p.id,
+        });
+        this.bus.publish({
+          type: "promise.broken",
+          tick: this.state.clock.tick,
+          promiseId: p.id,
+        });
+        this.applyMemoryHints(memoryHints, this.state.clock.tick);
+      }
+    }
 
-    // tick complete event
+    phases.push("feedback_encode");
     phases.push("tick_complete");
     this.bus.publish({
       type: "tick.completed",
@@ -235,8 +342,109 @@ export class TickOrchestrator {
       applied,
       rejected,
       faults,
-      phases,
+      phases: [...new Set(phases)],
     };
+  }
+
+  private reduceWorldEvents(
+    events: DomainEventLite[],
+    proposal: ActionProposal,
+  ): void {
+    const tick = this.state.clock.tick;
+    for (const e of events) {
+      if (e.type === "promise.made") {
+        const { memoryHints } = this.social.reduce({
+          type: "promise.made",
+          tick,
+          from: e.from,
+          to: e.to,
+          content: e.content,
+          kind: "give",
+          itemKind: proposal.structured.itemKind ?? "food",
+          quantity: proposal.structured.quantity ?? 1,
+          dueTick:
+            typeof proposal.structured.args?.dueTick === "number"
+              ? proposal.structured.args.dueTick
+              : tick + 72,
+          promiseId: e.promiseId,
+        });
+        this.applyMemoryHints(memoryHints, tick);
+      }
+      if (e.type === "message.delivered") {
+        const { memoryHints } = this.social.reduce({
+          type: "speak.delivered",
+          tick,
+          from: e.from,
+          to: e.to,
+          intent: e.intent ?? "inform",
+        });
+        this.applyMemoryHints(memoryHints, tick);
+        // hearer episodic
+        this.memory.encode({
+          owner: e.to,
+          kind: "episodic",
+          summary: `heard ${e.from}: ${e.text}`,
+          tick,
+          agents: [e.from],
+          tags: ["speech", e.intent ?? "inform"],
+          importance: 0.45,
+        });
+      }
+      if (e.type === "action.applied" && e.verb === "give") {
+        const target = proposal.structured.targetAgentId;
+        const kind = proposal.structured.itemKind ?? "food";
+        const qty = proposal.structured.quantity ?? 1;
+        if (target) {
+          const { memoryHints } = this.social.reduce({
+            type: "gift.given",
+            tick,
+            from: e.actor,
+            to: target,
+            itemKind: kind,
+            quantity: qty,
+          });
+          this.applyMemoryHints(memoryHints, tick);
+          // if gift fulfilled promise, social may emit kept — also publish
+          const kept = this.social
+            .listPromises()
+            .find(
+              (p) =>
+                p.from === e.actor &&
+                p.to === target &&
+                p.status === "kept" &&
+                p.keptTick === tick,
+            );
+          if (kept) {
+            this.bus.publish({
+              type: "promise.kept",
+              tick,
+              promiseId: kept.id,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  private applyMemoryHints(
+    hints: import("@gss/social").MemoryHint[],
+    tick: number,
+  ): void {
+    for (const h of hints) {
+      for (const owner of h.owners) {
+        this.memory.encode({
+          owner,
+          kind: h.kind,
+          summary: h.summary,
+          tick,
+          agents: h.agents,
+          tags: h.tags,
+          payload: h.payload,
+          importance: h.importance,
+          promiseClass: h.promiseClass,
+        });
+      }
+    }
   }
 
   async runTicks(n: number): Promise<TickResult[]> {
@@ -248,8 +456,7 @@ export class TickOrchestrator {
   }
 
   async runDays(days: number): Promise<TickResult[]> {
-    const ticks = days * this.state.clock.ticksPerDay;
-    return this.runTicks(ticks);
+    return this.runTicks(days * this.state.clock.ticksPerDay);
   }
 
   toCheckpoint(checkpointId: string): CheckpointBundle {
@@ -258,6 +465,8 @@ export class TickOrchestrator {
       this.state.agents,
       this.state.clock,
       this.state.actionSequence,
+      this.memory,
+      this.social,
     );
     return {
       format: "gss-checkpoint@1",
@@ -272,23 +481,41 @@ export class TickOrchestrator {
       eventLog: this.bus.getLog(),
       actionSequence: this.state.actionSequence,
       fingerprint: JSON.stringify(fp),
+      memory: this.memory.snapshot(),
+      social: this.social.snapshot(),
     };
   }
 
   static fromCheckpoint(
     bundle: CheckpointBundle,
     cognition?: RuleCognitiveEngine,
+    cognitionFactory?: CognitionFactory,
   ): TickOrchestrator {
     if (bundle.format !== "gss-checkpoint@1") {
       throw new Error(`unsupported checkpoint format ${bundle.format}`);
     }
-    const world = new WorldAuthority(bundle.world as import("@gss/world").WorldState);
+    const world = new WorldAuthority(
+      bundle.world as import("@gss/world").WorldState,
+    );
+    const memory = bundle.memory
+      ? MemoryStore.fromSnapshot(
+          bundle.memory as import("@gss/memory").MemoryStoreSnapshot,
+        )
+      : new MemoryStore();
+    const social = bundle.social
+      ? SocialGraph.fromSnapshot(
+          bundle.social as import("@gss/social").SocialGraphSnapshot,
+        )
+      : new SocialGraph();
     const orch = new TickOrchestrator({
       world,
       seed: bundle.seed,
       scenarioId: bundle.scenarioId,
       agentStates: bundle.agents as Record<string, AgentState>,
       cognition,
+      cognitionFactory,
+      memory,
+      social,
       ticksPerDay: bundle.clock.ticksPerDay,
     });
     orch.state.clock = { ...bundle.clock };

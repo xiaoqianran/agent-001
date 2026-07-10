@@ -1,0 +1,95 @@
+import type { AgentId, Tick } from "@gss/contracts";
+
+export type RelationType =
+  | "stranger"
+  | "acquaintance"
+  | "friend"
+  | "rival";
+
+export interface RelationDimensions {
+  affinity: number;
+  trust: number;
+  debt: number;
+  respect: number;
+}
+
+export interface RelationEdge {
+  a: AgentId;
+  b: AgentId;
+  type: RelationType;
+  dimensions: RelationDimensions;
+}
+
+export type PromiseStatus = "pending" | "kept" | "broken";
+
+export interface PromiseRecord {
+  id: string;
+  from: AgentId;
+  to: AgentId;
+  content: string;
+  /** e.g. give food */
+  kind: string;
+  itemKind?: string;
+  quantity?: number;
+  madeTick: Tick;
+  dueTick?: Tick;
+  status: PromiseStatus;
+  keptTick?: Tick;
+  brokenTick?: Tick;
+}
+
+export interface SocialSlice {
+  subject: AgentId;
+  relations: Array<{
+    other: AgentId;
+    dimensions: RelationDimensions;
+    type: RelationType;
+  }>;
+  pendingPromisesAsPromisor: PromiseRecord[];
+  pendingPromisesAsPromisee: PromiseRecord[];
+}
+
+export interface SocialGraphSnapshot {
+  edges: RelationEdge[];
+  promises: PromiseRecord[];
+  nextPromiseId: number;
+}
+
+export type SocialEvent =
+  | {
+      type: "promise.made";
+      tick: Tick;
+      from: AgentId;
+      to: AgentId;
+      content: string;
+      kind: string;
+      itemKind?: string;
+      quantity?: number;
+      dueTick?: Tick;
+      promiseId?: string;
+    }
+  | {
+      type: "promise.kept";
+      tick: Tick;
+      promiseId: string;
+    }
+  | {
+      type: "promise.broken";
+      tick: Tick;
+      promiseId: string;
+    }
+  | {
+      type: "gift.given";
+      tick: Tick;
+      from: AgentId;
+      to: AgentId;
+      itemKind: string;
+      quantity: number;
+    }
+  | {
+      type: "speak.delivered";
+      tick: Tick;
+      from: AgentId;
+      to: AgentId;
+      intent: string;
+    };

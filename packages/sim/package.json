@@ -22,6 +22,8 @@
     "@gss/agent": "workspace:*",
     "@gss/cognition": "workspace:*",
     "@gss/runtime": "workspace:*",
-    "@gss/llm": "workspace:*"
+    "@gss/llm": "workspace:*",
+    "@gss/memory": "workspace:*",
+    "@gss/social": "workspace:*"
   }
 }

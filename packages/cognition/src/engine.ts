@@ -14,20 +14,23 @@ export interface CognitiveEngineOptions {
   llm?: LlmPort;
   /** When true, cognitive tick throws (for fault isolation tests) */
   forceThrow?: boolean;
+  /** Role bias for dyad scenarios: promisor tends to promise early */
+  roleHint?: "promisor" | "promisee" | "neutral";
 }
 
 /**
- * Rule-first multi-stage cognitive cycle.
- * Stages: Perceive → Attend → Feel → Deliberate → Decide → Act(proposal) → Feedback(via runtime).
- * Does NOT import the world package — only consumes LocalObservation.
+ * Rule-first multi-stage cognitive cycle with Retrieve (GOAL-002).
+ * Does NOT import the world package — only consumes LocalObservation + read-only social/memories.
  */
 export class RuleCognitiveEngine {
   private readonly llm: LlmPort;
   private forceThrow: boolean;
+  private roleHint: "promisor" | "promisee" | "neutral";
 
   constructor(opts: CognitiveEngineOptions = {}) {
     this.llm = opts.llm ?? new StubLlm();
     this.forceThrow = opts.forceThrow ?? false;
+    this.roleHint = opts.roleHint ?? "neutral";
   }
 
   setForceThrow(v: boolean): void {
@@ -42,8 +45,9 @@ export class RuleCognitiveEngine {
       throw new Error("injected cognitive fault");
     }
 
-    // 1 Perceive — observation already provided
     const obs = input.observation;
+    const social = input.social;
+    const memories = input.memories ?? [];
 
     // 2 Attend
     const attended: DecisionTrace["attended"] = [];
@@ -63,25 +67,141 @@ export class RuleCognitiveEngine {
         ref: p.id,
       });
     }
+    if (social?.pendingPromisesAsPromisor.length) {
+      attended.push({
+        kind: "promise.owed",
+        salience: 0.9,
+        ref: social.pendingPromisesAsPromisor[0]!.id,
+      });
+    }
+    if (memories.length) {
+      attended.push({
+        kind: "memory",
+        salience: memories[0]!.importance,
+        ref: memories[0]!.id,
+      });
+    }
     if (attended.length === 0) {
       attended.push({ kind: "idle", salience: 0.1 });
     }
 
-    // 3–4 Retrieve simplified (no memory store yet)
-    const retrievedMemoryIds: string[] = [];
+    // 3–4 Retrieve — ids already provided by runtime from MemoryStore
+    const retrievedMemoryIds = memories.map((m) => m.id);
 
-    // 5 Feel — update emotion lightly from needs
+    // 5 Feel
     const emotion = { ...state.emotion };
     if (state.needs.hunger > 0.7) emotion.fear = clamp01(emotion.fear + 0.05);
     if (state.needs.rest > 0.7) emotion.sadness = clamp01(emotion.sadness + 0.03);
+    if (social?.pendingPromisesAsPromisor.length) {
+      emotion.guilt = clamp01(emotion.guilt + 0.05);
+    }
 
-    // 6 Deliberate — rule options
+    // 6 Deliberate
     const options: DecisionTrace["options"] = [];
     const add = (action: StructuredAction, score: number) => {
       options.push({ action, score });
     };
 
     const foodHere = obs.resourcePools.find((p) => p.kind === "food" && p.quantity > 0);
+    const othersHere = obs.agentsHere.filter((a) => a.id !== input.agentId);
+    const invFood = 0; // inventory not in observation; runtime may encode in social goals
+
+    // Fulfill pending promise: get food then give
+    const myPromise = social?.pendingPromisesAsPromisor[0];
+    if (myPromise) {
+      const targetHere = othersHere.some((a) => a.id === myPromise.to);
+      // Prefer take food if pool here
+      if (foodHere) {
+        add(
+          {
+            verb: "take",
+            itemKind: "food",
+            quantity: 1,
+            mutexSlots: ["manual"],
+          },
+          0.95,
+        );
+      } else {
+        for (const t of ["storehouse", "woods", "cabin"]) {
+          if (obs.place.adjacent.includes(t)) {
+            add(
+              {
+                verb: "move",
+                targetPlaceId: t,
+                mutexSlots: ["locomotion"],
+              },
+              0.88 + (t === "storehouse" ? 0.05 : 0),
+            );
+          }
+        }
+      }
+      // If we might have food (heuristic: after take or work), try give when co-located
+      if (targetHere) {
+        add(
+          {
+            verb: "give",
+            targetAgentId: myPromise.to,
+            itemKind: myPromise.itemKind ?? "food",
+            quantity: myPromise.quantity ?? 1,
+            mutexSlots: ["manual"],
+          },
+          0.99,
+        );
+      } else {
+        // move toward last known - try cabin first as meeting place
+        for (const t of obs.place.adjacent) {
+          add(
+            {
+              verb: "move",
+              targetPlaceId: t,
+              mutexSlots: ["locomotion"],
+            },
+            0.7,
+          );
+        }
+      }
+    }
+
+    // Early dyad: promisor makes promise when co-located and no pending
+    if (
+      !myPromise &&
+      (this.roleHint === "promisor" || input.clock.tick <= 6) &&
+      othersHere.length > 0 &&
+      input.clock.tick <= 12
+    ) {
+      const other = othersHere[0]!;
+      add(
+        {
+          verb: "speak",
+          targetAgentId: other.id,
+          mutexSlots: ["speech"],
+          args: {
+            intent: "promise",
+            promiseContent: "I will give you food soon",
+            dueTick: input.clock.tick + 48,
+          },
+        },
+        this.roleHint === "promisor" ? 0.92 : 0.35,
+      );
+    }
+
+    // Promisee may request
+    if (
+      this.roleHint === "promisee" &&
+      othersHere.length > 0 &&
+      !social?.pendingPromisesAsPromisee.length &&
+      input.clock.tick < 10
+    ) {
+      add(
+        {
+          verb: "speak",
+          targetAgentId: othersHere[0]!.id,
+          mutexSlots: ["speech"],
+          args: { intent: "request" },
+        },
+        0.4,
+      );
+    }
 
     if (state.needs.hunger > 0.5 && foodHere) {
       add(
@@ -96,11 +216,7 @@ export class RuleCognitiveEngine {
     }
 
     if (state.needs.hunger > 0.5 && !foodHere) {
-      // prefer storehouse then woods
-      const targets = ["storehouse", "woods", "cabin"].filter((p) =>
-        obs.place.adjacent.includes(p) || obs.adjacentPlaces.some((a) => a.id === p),
-      );
-      for (const t of targets) {
+      for (const t of ["storehouse", "woods", "cabin"]) {
         if (obs.place.adjacent.includes(t)) {
           add(
             {
@@ -114,7 +230,11 @@ export class RuleCognitiveEngine {
       }
     }
 
-    if (state.needs.rest > 0.55 || input.clock.hourInDay >= 21 || input.clock.hourInDay < 5) {
+    if (
+      state.needs.rest > 0.55 ||
+      input.clock.hourInDay >= 21 ||
+      input.clock.hourInDay < 5
+    ) {
       add({ verb: "rest", mutexSlots: ["rest"] }, 0.7 + state.needs.rest * 0.2);
     }
 
@@ -122,7 +242,6 @@ export class RuleCognitiveEngine {
       add({ verb: "work", mutexSlots: ["manual"] }, 0.55);
     }
 
-    // explore / maintain
     for (const adj of obs.place.adjacent) {
       add(
         {
@@ -135,16 +254,20 @@ export class RuleCognitiveEngine {
     }
 
     add({ verb: "observe", mutexSlots: ["observe"] }, 0.15);
-    add(
-      {
-        verb: "speak",
-        mutexSlots: ["speech"],
-        visibility: "private",
-      },
-      0.05,
-    );
 
-    // optional LLM flavor for utterance only (does not choose action)
+    // Boost options that align with retrieved promise memories
+    for (const m of memories) {
+      if (m.tags.includes("promise-class") && m.summary.includes("promised")) {
+        for (const o of options) {
+          if (o.action.verb === "give" || o.action.verb === "take") {
+            o.score += 0.05;
+          }
+        }
+      }
+    }
+
+    void invFood;
+
     let utterance: string | undefined;
     let tokensUsed = 0;
     if (this.llm.name !== "stub" || process.env.GSS_LLM_STUB_UTTERANCE === "1") {
@@ -152,11 +275,11 @@ export class RuleCognitiveEngine {
         messages: [
           {
             role: "system",
-            content: "One short first-person status line for a cabin dweller.",
+            content: "One short first-person status line.",
           },
           {
             role: "user",
-            content: `place=${obs.place.id} hunger=${state.needs.hunger.toFixed(2)} rest=${state.needs.rest.toFixed(2)}`,
+            content: `place=${obs.place.id} hunger=${state.needs.hunger.toFixed(2)}`,
           },
         ],
         temperature: 0,
@@ -168,21 +291,26 @@ export class RuleCognitiveEngine {
       }
     }
 
-    // 7 Decide — satisficing: highest score
     options.sort((a, b) => b.score - a.score);
     const best = options[0];
     const actionId = `act-${input.agentId}-${input.clock.tick}`;
     let action: ActionProposal | undefined;
     if (best) {
+      const u =
+        best.action.verb === "speak"
+          ? utterance ??
+            (best.action.args?.intent === "promise"
+              ? "I promise to bring you food."
+              : best.action.args?.intent === "request"
+                ? "Could you help with food?"
+                : "Hello.")
+          : utterance;
       action = {
         id: actionId,
         actor: input.agentId,
         tickProposed: input.clock.tick,
         structured: best.action,
-        utterance:
-          best.action.verb === "speak"
-            ? utterance ?? "All quiet at the cabin."
-            : utterance,
+        utterance: u,
       };
     }
 
@@ -201,34 +329,25 @@ export class RuleCognitiveEngine {
       emotionSnapshot: emotion,
       physiologySnapshot: { ...state.physiology },
       dominantNeeds,
-      goalsConsidered: state.goals.filter((g) => g.status === "active").map((g) => g.id),
+      goalsConsidered: state.goals
+        .filter((g) => g.status === "active")
+        .map((g) => g.id),
       options,
       chosen: action?.id,
       reflectionInsightsUsed: [],
       modelTier: input.budget.tier,
     };
 
-    // internal updates from anticipated act (runtime may refine after feedback)
-    const internalUpdates: CognitiveTickOutput["internalUpdates"] = {
-      emotion,
-      needs: {},
-      physiology: {},
-    };
-
     return {
       action,
-      internalUpdates,
+      internalUpdates: { emotion, needs: {}, physiology: {} },
       memoryOps: [{ op: "encode_intent", payload: { actionId: action?.id } }],
       decisionTrace,
       tokensUsed,
     };
   }
 
-  /** Apply action feedback to needs after world apply */
-  applyFeedback(
-    state: AgentState,
-    percepts: string[],
-  ): AgentState {
+  applyFeedback(state: AgentState, percepts: string[]): AgentState {
     const next = structuredClone(state);
     for (const p of percepts) {
       if (p.startsWith("took:food")) {
@@ -247,6 +366,9 @@ export class RuleCognitiveEngine {
       if (p.startsWith("moved_to:")) {
         next.needs.energy = clamp01(next.needs.energy - 0.05);
         next.placeId = p.slice("moved_to:".length);
+      }
+      if (p.startsWith("gave:food")) {
+        next.needs.energy = clamp01(next.needs.energy - 0.02);
       }
     }
     next.physiology.hunger = next.needs.hunger;
