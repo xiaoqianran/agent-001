@@ -70,6 +70,7 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [GOAL-010 规格](docs/goals/GOAL-010-explain-evidence-chain.md)（已完成：explain 证据链）
 - [GOAL-011 规格](docs/goals/GOAL-011-experiment-fork-report.md)（已完成：实验分叉 + 对照报告）
 - [GOAL-012 规格](docs/goals/GOAL-012-eval-promise-resume.md)（已完成：承诺 resume eval 夹具）
+- [GOAL-013 规格](docs/goals/GOAL-013-belief-rumor-vignette.md)（下一步：BeliefStore + 谣言 vignette）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)

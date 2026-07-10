@@ -178,9 +178,4 @@ function runEvalSuite(ids?: string[]): Promise<EvalSuiteResult>
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-013 候选：**
-
-1. **BeliefStore 最小版** + 谣言 vignette（评估 #4）  
-2. **Observer 写路径 OBSERVER_TOKEN**  
-3. **eval 扩展**：`institution-shock` / `seed-repro` 包装进 suite  
-4. **单 Agent fault 隔离** 夹具显式化（评估 #6）  
+**GOAL-013（已成文）：** [GOAL-013-belief-rumor-vignette.md](./GOAL-013-belief-rumor-vignette.md) — BeliefStore 最小版 + 谣言 vignette（评估 #4 缩小版）。  
