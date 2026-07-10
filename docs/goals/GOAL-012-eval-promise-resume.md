@@ -1,6 +1,8 @@
 # GOAL-012：承诺断点续跑评估夹具（评估 #1 缩小版）
 
 > 可直接作为下一条 `/goal` 正文使用（整份粘贴，或：`执行 docs/goals/GOAL-012-eval-promise-resume.md`）。
+>
+> **状态：已实现（GOAL-012）** — 见 `docs/engineering/eval-promise-resume.md`。
 
 ---
 
