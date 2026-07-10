@@ -46,6 +46,24 @@ export interface CreateSimOptions {
   contributionReward?: number;
   freeRidePenalty?: number;
   transparency?: boolean;
+  lodEdgeSkip?: number;
+  focusPlaceIds?: string[];
+}
+
+function withInterest(
+  orch: TickOrchestrator,
+  o: CreateSimOptions,
+): TickOrchestrator {
+  const lod = o.lodEdgeSkip ?? o.experimentParams?.lodEdgeSkip;
+  const focus =
+    o.focusPlaceIds ?? o.experimentParams?.focusPlaceIds ?? undefined;
+  if ((lod !== undefined && lod > 0) || (focus && focus.length)) {
+    orch.setInterest({
+      edgeSkipChance: lod ?? 0,
+      focusPlaceIds: focus ?? ["cabin"],
+    });
+  }
+  return orch;
 }
 
 function foodOptsFrom(opts: CreateSimOptions): FoodPoolOpts | undefined {
@@ -92,6 +110,8 @@ function mergeOpts(opts: CreateSimOptions): CreateSimOptions {
     freeRidePenalty: opts.freeRidePenalty ?? ep?.freeRidePenalty,
     transparency: opts.transparency ?? ep?.transparency,
     institution: opts.institution ?? ep?.institution,
+    lodEdgeSkip: opts.lodEdgeSkip ?? ep?.lodEdgeSkip,
+    focusPlaceIds: opts.focusPlaceIds ?? ep?.focusPlaceIds,
   };
 }
 
@@ -123,7 +143,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
     const agentId = o.agentId ?? "agent-alice";
     const world = new WorldAuthority(createSoloCabinWorld(agentId, food), inst);
     const agent = createAgentState(agentId, "Alice", "cabin");
-    return new TickOrchestrator({
+    return withInterest(new TickOrchestrator({
       world,
       seed,
       scenarioId,
@@ -136,7 +156,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
       institution: inst,
-    });
+    }), o);
   }
 
   if (scenarioId === "dyad-cabin") {
@@ -148,7 +168,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
     );
     const alice = createAgentState(aliceId, "Alice", "cabin");
     const bob = createAgentState(bobId, "Bob", "cabin");
-    return new TickOrchestrator({
+    return withInterest(new TickOrchestrator({
       world,
       seed,
       scenarioId,
@@ -162,7 +182,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
       institution: inst,
-    });
+    }), o);
   }
 
   if (scenarioId === "trio-cabin") {
@@ -178,7 +198,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
     const carol = createAgentState(carolId, "Carol", "woods");
     bob.needs.hunger = 0.55;
     carol.needs.hunger = 0.4;
-    return new TickOrchestrator({
+    return withInterest(new TickOrchestrator({
       world,
       seed,
       scenarioId,
@@ -199,7 +219,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
       institution: inst,
-    });
+    }), o);
   }
 
   if (scenarioId === "commons-cabin") {
@@ -236,7 +256,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       return "neutral";
     };
 
-    return new TickOrchestrator({
+    return withInterest(new TickOrchestrator({
       world,
       seed,
       scenarioId,
@@ -250,7 +270,7 @@ export function createSimulation(opts: CreateSimOptions): TickOrchestrator {
       social,
       ticksPerDay: o.ticksPerDay ?? 24,
       institution: inst,
-    });
+    }), o);
   }
 
   throw new Error(`unknown scenario ${scenarioId}`);

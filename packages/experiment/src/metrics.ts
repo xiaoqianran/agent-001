@@ -36,6 +36,10 @@ export interface RunMetrics {
     freeRideWithdrawals: number;
     granaryLevel: number;
   };
+  /** GOAL-007 interest management */
+  runtime: {
+    skippedCognitiveTicks: number;
+  };
 }
 
 /** Gini coefficient for non-negative values; 0 if empty or all equal. */
@@ -135,6 +139,9 @@ export function computeRunMetrics(
       freeRideWithdrawals: granary?.totalWithdrawn ?? 0,
       granaryLevel: granary?.level ?? 0,
     },
+    runtime: {
+      skippedCognitiveTicks: orch.getSkippedCognitiveTicks?.() ?? 0,
+    },
   };
 }
 
@@ -203,5 +210,6 @@ export function metricsFromAgentsOnly(
       freeRideWithdrawals: 0,
       granaryLevel: 0,
     },
+    runtime: { skippedCognitiveTicks: 0 },
   };
 }

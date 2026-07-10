@@ -147,6 +147,8 @@ export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
     contributionReward: params.contributionReward,
     freeRidePenalty: params.freeRidePenalty,
     transparency: params.transparency,
+    lodEdgeSkip: params.lodEdgeSkip,
+    focusPlaceIds: params.focusPlaceIds,
   });
 
   const lines: string[] = [];

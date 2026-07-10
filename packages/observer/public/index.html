@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GSS Observer — 只读观测</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1rem 1.5rem; background: #0f1419; color: #e7ecf1; }
+    h1 { font-size: 1.25rem; }
+    section { margin: 1rem 0; padding: 0.75rem 1rem; background: #1a2332; border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+    th, td { border: 1px solid #334; padding: 0.35rem 0.5rem; text-align: left; }
+    th { background: #243044; }
+    button { margin-right: 0.5rem; padding: 0.4rem 0.8rem; cursor: pointer; }
+    .muted { color: #8a9bb0; font-size: 0.85rem; }
+    #err { color: #f88; }
+    pre { white-space: pre-wrap; font-size: 0.8rem; max-height: 200px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>GSS Observer <span class="muted">只读 · Control Room</span></h1>
+  <p class="muted">轮询 <code>/world</code> <code>/timeline</code> <code>/metrics</code> · localhost</p>
+  <p>
+    <button id="btnRefresh">刷新</button>
+    <button id="btnAuto">自动 2s</button>
+    <span id="status" class="muted"></span>
+  </p>
+  <p id="err"></p>
+
+  <section>
+    <h2>世界</h2>
+    <div id="worldMeta"></div>
+    <h3>粮仓</h3>
+    <pre id="granary">—</pre>
+    <h3>Agents</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Place</th></tr></thead>
+      <tbody id="agents"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>指标</h2>
+    <pre id="metrics">—</pre>
+  </section>
+
+  <section>
+    <h2>时间线（最近 30）</h2>
+    <table>
+      <thead><tr><th>Tick</th><th>Type</th><th>Summary</th></tr></thead>
+      <tbody id="timeline"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let timer = null;
+
+    async function load() {
+      $("err").textContent = "";
+      try {
+        const [world, metrics, timeline] = await Promise.all([
+          fetch("/world").then((r) => r.json()),
+          fetch("/metrics").then((r) => r.json()),
+          fetch("/timeline").then((r) => r.json()),
+        ]);
+        $("status").textContent =
+          "tick=" + world.tick + " day=" + world.day + " frozen=" + world.frozen;
+        $("worldMeta").textContent =
+          "scenario=" + world.scenarioId + " places=" + (world.places || []).join(", ");
+        $("granary").textContent = JSON.stringify(world.granary || {}, null, 2);
+        const tb = $("agents");
+        tb.innerHTML = "";
+        for (const a of world.agents || []) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = "<td>" + a.id + "</td><td>" + a.name + "</td><td>" + a.placeId + "</td>";
+          tb.appendChild(tr);
+        }
+        $("metrics").textContent = JSON.stringify(
+          {
+            totals: metrics.totals,
+            publicGoods: metrics.publicGoods,
+            runtime: metrics.runtime,
+            wellbeing: metrics.wellbeing,
+          },
+          null,
+          2,
+        );
+        const tl = $("timeline");
+        tl.innerHTML = "";
+        const rows = (timeline || []).slice(-30).reverse();
+        for (const e of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + e.tick + "</td><td>" + e.type + "</td><td>" + (e.summary || "") + "</td>";
+          tl.appendChild(tr);
+        }
+      } catch (e) {
+        $("err").textContent = String(e);
+      }
+    }
+
+    $("btnRefresh").onclick = load;
+    $("btnAuto").onclick = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        $("btnAuto").textContent = "自动 2s";
+      } else {
+        timer = setInterval(load, 2000);
+        $("btnAuto").textContent = "停止自动";
+        load();
+      }
+    };
+    load();
+  </script>
+</body>
+</html>

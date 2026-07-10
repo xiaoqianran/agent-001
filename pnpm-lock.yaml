@@ -114,6 +114,21 @@ importers:
         specifier: workspace:*
         version: link:../contracts
 
+  packages/observer:
+    dependencies:
+      '@gss/control':
+        specifier: workspace:*
+        version: link:../control
+      '@gss/experiment':
+        specifier: workspace:*
+        version: link:../experiment
+      '@gss/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@gss/sim':
+        specifier: workspace:*
+        version: link:../sim
+
   packages/runtime:
     dependencies:
       '@gss/agent':

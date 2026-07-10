@@ -38,6 +38,10 @@ export interface ExperimentParams {
   contributionReward?: number;
   freeRidePenalty?: number;
   transparency?: boolean;
+  /** GOAL-007 LOD: 0..1 edge skip chance */
+  lodEdgeSkip?: number;
+  /** comma-separated or array of focus place ids */
+  focusPlaceIds?: string[];
 }
 
 export function parseParamPairs(
@@ -57,9 +61,12 @@ export function parseParamPairs(
       key === "freeRiderCount" ||
       key === "enforcementStrength" ||
       key === "contributionReward" ||
-      key === "freeRidePenalty"
+      key === "freeRidePenalty" ||
+      key === "lodEdgeSkip"
     ) {
       out[key] = Number(raw);
+    } else if (key === "focusPlaceIds") {
+      out[key] = raw.split(",").map((s) => s.trim()).filter(Boolean);
     } else if (key === "label" || key === "seed" || key === "scenario") {
       out[key] = raw;
     } else if (key === "testNormThresholds" || key === "transparency") {
@@ -138,6 +145,8 @@ export function paramsToRecord(p: ExperimentParams): Record<string, unknown> {
     contributionReward: p.contributionReward,
     freeRidePenalty: p.freeRidePenalty,
     transparency: p.transparency,
+    lodEdgeSkip: p.lodEdgeSkip,
+    focusPlaceIds: p.focusPlaceIds,
   };
 }
 

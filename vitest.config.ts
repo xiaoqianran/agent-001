@@ -19,6 +19,7 @@ export default defineConfig({
       "@gss/social": path.resolve(__dirname, "packages/social/src/index.ts"),
       "@gss/experiment": path.resolve(__dirname, "packages/experiment/src/index.ts"),
       "@gss/control": path.resolve(__dirname, "packages/control/src/index.ts"),
+      "@gss/observer": path.resolve(__dirname, "packages/observer/src/index.ts"),
     },
   },
 });

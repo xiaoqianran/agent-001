@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sim": "tsx apps/sim-cli/src/cli.ts",
+    "observer": "tsx packages/observer/src/cli.ts",
     "typecheck": "pnpm -r run typecheck"
   },
   "devDependencies": {

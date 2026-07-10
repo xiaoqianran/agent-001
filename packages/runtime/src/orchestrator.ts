@@ -2,6 +2,7 @@ import {
   advanceClock,
   agentOrder,
   createClock,
+  hash32,
   type ActionProposal,
   type CheckpointBundle,
   type DecisionTrace,
@@ -71,6 +72,19 @@ export interface TickResult {
 
 export type CognitionFactory = (agentId: string) => RuleCognitiveEngine;
 
+/** GOAL-007 interest management / LOD */
+export interface InterestConfig {
+  /** Places that always get full cognitive ticks */
+  focusPlaceIds?: string[];
+  /** Agents that always get full cognitive ticks */
+  focusAgentIds?: string[];
+  /**
+   * 0..1 — for non-focus agents, skip cognition if
+   * hash32(seed|tick|id)/2^32 < edgeSkipChance (deterministic).
+   */
+  edgeSkipChance?: number;
+}
+
 export class TickOrchestrator {
   readonly world: WorldAuthority;
   readonly bus: EventBus;
@@ -80,6 +94,8 @@ export class TickOrchestrator {
   private readonly defaultCognition: RuleCognitiveEngine;
   private state: SimulationState;
   private frozen = false;
+  private interest: InterestConfig = {};
+  private skippedCognitiveTicks = 0;
 
   constructor(args: {
     world: WorldAuthority;
@@ -97,6 +113,7 @@ export class TickOrchestrator {
       freeRidePenalty?: number;
       transparency?: boolean;
     };
+    interest?: InterestConfig;
   }) {
     this.world = args.world;
     this.bus = new EventBus();
@@ -124,6 +141,21 @@ export class TickOrchestrator {
     if (args.institution) {
       this.applyInstitution(args.institution);
     }
+    if (args.interest) {
+      this.interest = { ...args.interest };
+    }
+  }
+
+  setInterest(cfg: InterestConfig): void {
+    this.interest = { ...this.interest, ...cfg };
+  }
+
+  getInterest(): InterestConfig {
+    return { ...this.interest };
+  }
+
+  getSkippedCognitiveTicks(): number {
+    return this.skippedCognitiveTicks;
   }
 
   setFrozen(v: boolean): void {
@@ -157,6 +189,28 @@ export class TickOrchestrator {
 
   private eng(agentId: string): RuleCognitiveEngine {
     return this.cognitionByAgent.get(agentId) ?? this.defaultCognition;
+  }
+
+  /**
+   * Focus agents/places always run; pending-promise agents always run.
+   * Edge agents skip when hash/2^32 < edgeSkipChance.
+   */
+  shouldSkipCognitive(agentId: string, placeId: string): boolean {
+    const chance = this.interest.edgeSkipChance ?? 0;
+    if (chance <= 0) return false;
+    if (this.interest.focusAgentIds?.includes(agentId)) return false;
+    if (this.interest.focusPlaceIds?.includes(placeId)) return false;
+    const slice = this.social.getSlice(agentId, placeId);
+    if (
+      slice.pendingPromisesAsPromisor.length > 0 ||
+      slice.pendingPromisesAsPromisee.length > 0
+    ) {
+      return false;
+    }
+    const h = hash32(
+      `${this.state.seed.value}|${this.state.clock.tick}|${agentId}|lod`,
+    );
+    return h / 0xffffffff < chance;
   }
 
   /** @deprecated use eng; kept for tests that set forceThrow on single engine */
@@ -228,6 +282,13 @@ export class TickOrchestrator {
       if (!agent) continue;
       agent = driftNeeds(agent, this.state.clock.hourInDay);
       this.state.agents[agentId] = agent;
+
+      // LOD: may skip full cognition for edge agents
+      const bodyPlace = this.world.getAgent(agentId)?.placeId ?? agent.placeId;
+      if (this.shouldSkipCognitive(agentId, bodyPlace)) {
+        this.skippedCognitiveTicks += 1;
+        continue;
+      }
 
       try {
         const observation = this.world.observe(agentId, this.state.clock.tick);

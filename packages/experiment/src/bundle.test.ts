@@ -33,6 +33,7 @@ const sampleMetrics: RunMetrics = {
     freeRideWithdrawals: 0,
     granaryLevel: 0.2,
   },
+  runtime: { skippedCognitiveTicks: 0 },
 };
 
 describe("gss-bundle@1", () => {
