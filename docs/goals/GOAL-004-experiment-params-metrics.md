@@ -177,4 +177,4 @@ interface RunMetrics {
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-005：** 公共品（修路/共享粮仓）+ 搭便车 vignette；或 **实验包导出 gss-bundle@1** 与简单日级指标时间序列。  
+**GOAL-005（已成文）：** [GOAL-005-public-goods-bundle.md](./GOAL-005-public-goods-bundle.md) — 公共品/搭便车 + gss-bundle@1 导出。  
