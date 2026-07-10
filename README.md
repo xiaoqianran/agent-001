@@ -66,7 +66,7 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [GOAL-006 规格](docs/goals/GOAL-006-institution-control-api.md)（已完成：制度旋钮 + Control API）
 - [GOAL-007 规格](docs/goals/GOAL-007-observer-http.md)（已完成：只读观测 HTTP + LOD）
 - [GOAL-008 规格](docs/goals/GOAL-008-mini-legislature.md)（已完成：迷你立法环 + 简报）
-- [GOAL-009 规格](docs/goals/GOAL-009-ci-regression-highlights.md)（下一步：CI 回归 + 叙事高光）
+- [GOAL-009 规格](docs/goals/GOAL-009-ci-regression-highlights.md)（已完成：CI 回归 + 叙事高光）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)
@@ -75,6 +75,7 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [制度旋钮与 Control API](docs/engineering/institution-control-api.md)
 - [只读观测与 LOD](docs/engineering/observer-http.md)
 - [迷你立法与简报](docs/engineering/mini-legislature.md)
+- [CI / 回归 / 叙事高光](docs/engineering/ci-regression-highlights.md)
 
 ### 观测页
 
@@ -88,6 +89,15 @@ pnpm observer --scenario commons-cabin --seed 42 --days 1 --port 8787
 ```bash
 pnpm sim run --scenario assembly-cabin --days 5 --seed 42 --brief-out ./brief.md
 pnpm sim brief --scenario assembly-cabin --days 3 --seed 42
+```
+
+### CI 等价与高光
+
+```bash
+pnpm test
+pnpm regression
+pnpm sim highlights --scenario assembly-cabin --days 5 --seed 42
+pnpm sim run --scenario commons-cabin --days 3 --seed 42 --highlights-out ./hl.json
 ```
 
 ## 核心目标

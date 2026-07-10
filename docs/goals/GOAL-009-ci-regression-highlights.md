@@ -1,6 +1,8 @@
 # GOAL-009：CI 回归套件 + 多场景冒烟 + 叙事高光
 
 > 可直接作为下一条 `/goal` 正文使用（整份粘贴，或：`执行 docs/goals/GOAL-009-ci-regression-highlights.md`）。
+>
+> **状态：已实现（GOAL-009）** — 见 `docs/engineering/ci-regression-highlights.md`。
 
 ---
 
