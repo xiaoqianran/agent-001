@@ -176,4 +176,4 @@ Norm {
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-004：** 实验层最小能力 — seed 已有基础上的 **institutionParams 注入**、简单对照指标导出（基尼/资源分布）、评估 #5 迷你（改一个池大小看宏观指标变化）；或 **PublicGood 搭便车**  vignette。  
+**GOAL-004（已成文）：** [GOAL-004-experiment-params-metrics.md](./GOAL-004-experiment-params-metrics.md) — 参数注入、RunMetrics、compare-params（评估 #5 迷你）。  
