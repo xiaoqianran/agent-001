@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../contracts" },
+    { "path": "../world" },
+    { "path": "../agent" },
+    { "path": "../cognition" },
+    { "path": "../runtime" },
+    { "path": "../llm" }
+  ]
+}
