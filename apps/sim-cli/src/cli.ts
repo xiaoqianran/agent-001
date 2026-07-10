@@ -16,6 +16,9 @@ import {
   warmupAndForkCompare,
   buildCompareReport,
   renderReportMarkdown,
+  runEvalCase,
+  runEvalSuite,
+  listEvalCases,
   type ExperimentParams,
   type ScenarioId,
   type ExplainQuery,
@@ -58,12 +61,15 @@ Usage:
   pnpm sim explain --scenario assembly-cabin --days 5 --seed 42 --proposal prop-1
   pnpm sim explain --scenario commons-cabin --days 3 --seed 42 \\
     --action-line '5:agent-bob:withdraw_public:REJECT:INSUFFICIENT_RESOURCE'
+  pnpm sim eval --case promise-resume --seed 42
+  pnpm sim eval --suite core --out ./eval-report.json
 
 Options:
   --scenario --days --seed --param key=value --label
   --metrics-out --brief-out --highlights-out --timeline-out --checkpoint --log
   --a / --b --out / --in --kind --payload --report-out --warmup-days
   --tick --agent --proposal --action-line --from-highlight-kind --from-checkpoint
+  --case --suite --warmup-days --resume-days
 `);
   process.exit(1);
 }
@@ -455,6 +461,57 @@ async function main() {
     }
     console.log(body);
     process.exit(0);
+  }
+
+  if (cmd === "eval") {
+    const suite = flags.suite;
+    const caseId = flags.case;
+    const seed = flags.seed;
+    const warmupDays = flags["warmup-days"]
+      ? Number(flags["warmup-days"])
+      : undefined;
+    const resumeDays = flags["resume-days"]
+      ? Number(flags["resume-days"])
+      : undefined;
+    const out = flags.out ?? flags["eval-out"];
+
+    if (!suite && !caseId) {
+      console.error(
+        `eval requires --case <id> or --suite <name>; known cases: ${listEvalCases().join(", ")}`,
+      );
+      process.exit(2);
+    }
+
+    if (suite) {
+      const result = await runEvalSuite(suite, {
+        seed,
+        warmupDays,
+        resumeDays,
+      });
+      const body = JSON.stringify(result, null, 2);
+      if (out) writeOut(out, body);
+      console.log(body);
+      process.exit(result.failed > 0 ? 1 : 0);
+    }
+
+    const result = await runEvalCase(caseId!, {
+      seed,
+      warmupDays,
+      resumeDays,
+    });
+    // wrap single case as gss-eval@1 for consistent consumers
+    const wrapped = {
+      format: "gss-eval@1" as const,
+      ranAt: new Date().toISOString(),
+      cases: [result],
+      passed: result.status === "pass" ? 1 : 0,
+      failed: result.status === "fail" ? 1 : 0,
+      skipped: result.status === "skip" ? 1 : 0,
+    };
+    const body = JSON.stringify(wrapped, null, 2);
+    if (out) writeOut(out, body);
+    console.log(body);
+    process.exit(result.status === "pass" || result.status === "skip" ? 0 : 1);
   }
 
   if (cmd === "export-bundle") {

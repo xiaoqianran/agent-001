@@ -11,6 +11,7 @@
     "sim": "tsx apps/sim-cli/src/cli.ts",
     "observer": "tsx packages/observer/src/cli.ts",
     "regression": "tsx scripts/regression.ts",
+    "eval": "tsx apps/sim-cli/src/cli.ts eval",
     "typecheck": "pnpm -r run typecheck"
   },
   "devDependencies": {
