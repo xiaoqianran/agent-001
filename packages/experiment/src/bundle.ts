@@ -28,6 +28,9 @@ export interface GssBundleV1 {
     summary: string;
   }>;
   auditLog?: Array<Record<string, unknown>>;
+  /** GOAL-011 optional fork metadata (backward compatible) */
+  forkParentRef?: string;
+  branchLabel?: string;
 }
 
 export function createBundle(args: {
@@ -38,6 +41,8 @@ export function createBundle(args: {
   institutionParams?: import("./institution.js").InstitutionParams;
   timeline?: GssBundleV1["timeline"];
   auditLog?: GssBundleV1["auditLog"];
+  forkParentRef?: string;
+  branchLabel?: string;
 }): GssBundleV1 {
   return {
     format: "gss-bundle@1",
@@ -50,6 +55,8 @@ export function createBundle(args: {
     institutionParams: args.institutionParams,
     timeline: args.timeline,
     auditLog: args.auditLog,
+    forkParentRef: args.forkParentRef,
+    branchLabel: args.branchLabel,
   };
 }
 

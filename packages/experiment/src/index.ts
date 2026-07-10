@@ -6,3 +6,4 @@ export * from "./institution.js";
 export * from "./brief.js";
 export * from "./highlights.js";
 export * from "./explain.js";
+export * from "./report.js";
