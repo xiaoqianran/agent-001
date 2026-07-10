@@ -68,7 +68,7 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [GOAL-008 规格](docs/goals/GOAL-008-mini-legislature.md)（已完成：迷你立法环 + 简报）
 - [GOAL-009 规格](docs/goals/GOAL-009-ci-regression-highlights.md)（已完成：CI 回归 + 叙事高光）
 - [GOAL-010 规格](docs/goals/GOAL-010-explain-evidence-chain.md)（已完成：explain 证据链）
-- [GOAL-011 规格](docs/goals/GOAL-011-experiment-fork-report.md)（下一步：实验分叉 + 对照报告）
+- [GOAL-011 规格](docs/goals/GOAL-011-experiment-fork-report.md)（已完成：实验分叉 + 对照报告）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)
@@ -79,6 +79,7 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [迷你立法与简报](docs/engineering/mini-legislature.md)
 - [CI / 回归 / 叙事高光](docs/engineering/ci-regression-highlights.md)
 - [因果解释 explain](docs/engineering/explain-evidence-chain.md)
+- [实验分叉与对照报告](docs/engineering/experiment-fork-report.md)
 
 ### 观测页
 
@@ -109,6 +110,17 @@ pnpm sim run --scenario commons-cabin --days 3 --seed 42 --highlights-out ./hl.j
 pnpm sim explain --scenario commons-cabin --days 3 --seed 42 --from-highlight-kind conflict
 pnpm sim explain --scenario commons-cabin --days 3 --seed 42 --tick 5 --agent agent-bob
 pnpm sim explain --scenario assembly-cabin --days 5 --seed 42 --proposal prop-1
+```
+
+### 实验分叉与对照报告
+
+```bash
+pnpm sim run --scenario commons-cabin --days 2 --seed 42 --checkpoint ./ckpts/parent.json
+pnpm sim fork-compare --from-checkpoint ./ckpts/parent.json --days 3 \
+  --a enforcementStrength=0 --b enforcementStrength=0.9 \
+  --report-out ./reports/fork.md
+pnpm sim compare-params --scenario commons-cabin --seed 42 --days 5 \
+  --a freeRiderCount=0 --b freeRiderCount=2 --report-out ./reports/compare.md
 ```
 
 ## 核心目标

@@ -1,6 +1,8 @@
 # GOAL-011：实验分叉 fork + A/B 对照报告（实验包 v2）
 
 > 可直接作为下一条 `/goal` 正文使用（整份粘贴，或：`执行 docs/goals/GOAL-011-experiment-fork-report.md`）。
+>
+> **状态：已实现（GOAL-011）** — 见 `docs/engineering/experiment-fork-report.md`。
 
 ---
 
