@@ -234,9 +234,4 @@ pnpm sim report --a-metrics ./a.json --b-metrics ./b.json --out ./r.md
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-012 候选：**
-
-1. **eval 夹具**：承诺 resume（#1）缩小版 N 日  
-2. **BeliefStore 最小版** + 谣言 vignette（#4）  
-3. **Observer 写路径 token 鉴权**  
-4. **explain 报告深度嵌入** + 时间线深链  
+**GOAL-012（已成文）：** [GOAL-012-eval-promise-resume.md](./GOAL-012-eval-promise-resume.md) — 承诺断点续跑评估夹具（评估 #1 缩小版）。  
