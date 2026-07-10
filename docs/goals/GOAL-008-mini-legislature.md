@@ -160,4 +160,4 @@ function renderDailyBrief(orch, day): string
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-009：** 多场景回归套件 + CI workflow；或 **叙事高光检测**（冲突/立法通过自动标记）；或 Observer 写入开关的安全鉴权最小实现。  
+**GOAL-009（已成文）：** [GOAL-009-ci-regression-highlights.md](./GOAL-009-ci-regression-highlights.md) — CI + 多场景回归 + 叙事高光检测。  
