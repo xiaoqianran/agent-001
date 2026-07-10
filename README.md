@@ -36,3 +36,5 @@ export NEWAPI_MODEL="openai/gpt-oss-120b"
 ## 协作约定
 
 - [Git Commit 规范](docs/COMMIT_CONVENTION.md)
+
+- [下一阶段 Goal](docs/goals/GOAL-001-runtime-foundation.md) — 运行时地基（契约 / World / Tick / 单 Agent 日环）
