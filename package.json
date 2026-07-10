@@ -10,6 +10,7 @@
     "test:watch": "vitest",
     "sim": "tsx apps/sim-cli/src/cli.ts",
     "observer": "tsx packages/observer/src/cli.ts",
+    "regression": "tsx scripts/regression.ts",
     "typecheck": "pnpm -r run typecheck"
   },
   "devDependencies": {

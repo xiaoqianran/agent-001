@@ -40,6 +40,33 @@ describe("observer HTTP", () => {
     expect(world.agents.length).toBe(3);
   });
 
+  it("GET /highlights returns JSON array", async () => {
+    const orch = createSimulation({
+      seed: "hl",
+      scenario: "commons-cabin",
+    });
+    await orch.runDays(1);
+    const ctx = {
+      orch,
+      control: new ControlRoomService(orch),
+      params: {
+        seed: "hl",
+        scenario: "commons-cabin" as const,
+        days: 1,
+      },
+      allowWrite: false,
+    };
+    const r = await handleObserverRequest(
+      ctx,
+      "GET",
+      "/highlights",
+      new URLSearchParams(),
+    );
+    expect(r.status).toBe(200);
+    const body = JSON.parse(r.body as string);
+    expect(Array.isArray(body)).toBe(true);
+  });
+
   it("POST inject forbidden when write disabled", async () => {
     const orch = createSimulation({ seed: "w", scenario: "commons-cabin" });
     const ctx = {

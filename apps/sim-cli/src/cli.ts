@@ -10,6 +10,7 @@ import {
   exportBundle,
   inspectBundleFile,
   renderDailyBrief,
+  detectHighlightsFromOrch,
   type ExperimentParams,
   type ScenarioId,
 } from "@gss/sim";
@@ -30,10 +31,12 @@ Usage:
   pnpm sim export-bundle --scenario commons-cabin --days 5 --seed 42 --out ./bundles/run.json
   pnpm sim run --scenario assembly-cabin --days 5 --seed 42 --brief-out ./brief.md
   pnpm sim brief --scenario assembly-cabin --days 3 --seed 42
+  pnpm sim highlights --scenario assembly-cabin --days 5 --seed 42
+  pnpm sim run --scenario commons-cabin --days 3 --seed 42 --highlights-out ./hl.json
 
 Options:
   --scenario --days --seed --param key=value --label
-  --metrics-out --brief-out --timeline-out --checkpoint --log
+  --metrics-out --brief-out --highlights-out --timeline-out --checkpoint --log
   --a / --b --out / --in --kind --payload
 `);
   process.exit(1);
@@ -79,6 +82,7 @@ async function main() {
       logPath: flags.log,
       metricsOut: flags["metrics-out"],
       briefOut: flags["brief-out"],
+      highlightsOut: flags["highlights-out"],
       storehouseFood: partial.storehouseFood,
       woodsFood: partial.woodsFood,
       initialGranary: partial.initialGranary,
@@ -228,6 +232,49 @@ async function main() {
       fs.writeFileSync(out, text);
     }
     console.log(text);
+    process.exit(0);
+  }
+
+  if (cmd === "highlights") {
+    const partial = parseParamPairs(multi.param ?? []);
+    const scenario = (flags.scenario ?? "assembly-cabin") as ScenarioId;
+    const days = Number(flags.days ?? "5");
+    const seed = flags.seed ?? "42";
+    const orch = createSimulation({
+      seed,
+      scenario,
+      freeRiderCount: partial.freeRiderCount ?? 1,
+      storehouseFood: partial.storehouseFood,
+      woodsFood: partial.woodsFood,
+      initialGranary: partial.initialGranary,
+      enforcementStrength: partial.enforcementStrength,
+      contributionReward: partial.contributionReward,
+      freeRidePenalty: partial.freeRidePenalty,
+      transparency: partial.transparency,
+    });
+    await orch.runDays(days);
+    const params: ExperimentParams = {
+      seed,
+      scenario,
+      days,
+      freeRiderCount: partial.freeRiderCount ?? 1,
+      storehouseFood: partial.storehouseFood,
+      woodsFood: partial.woodsFood,
+      initialGranary: partial.initialGranary,
+      enforcementStrength: partial.enforcementStrength,
+      contributionReward: partial.contributionReward,
+      freeRidePenalty: partial.freeRidePenalty,
+      transparency: partial.transparency,
+    };
+    const highlights = detectHighlightsFromOrch(orch, params);
+    const out = flags.out ?? flags["highlights-out"];
+    const body = JSON.stringify(highlights, null, 2);
+    if (out) {
+      const dir = out.includes("/") ? out.slice(0, out.lastIndexOf("/")) : ".";
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(out, body);
+    }
+    console.log(body);
     process.exit(0);
   }
 

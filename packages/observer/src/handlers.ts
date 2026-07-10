@@ -3,6 +3,7 @@ import type { ControlRoomService } from "@gss/control";
 import type { TickOrchestrator } from "@gss/runtime";
 import {
   computeRunMetrics,
+  detectHighlightsFromOrch,
   type ExperimentParams,
 } from "@gss/experiment";
 
@@ -84,6 +85,10 @@ export async function handleObserverRequest(
 
   if (method === "GET" && urlPath === "/metrics") {
     return json(200, computeRunMetrics(ctx.orch, ctx.params));
+  }
+
+  if (method === "GET" && urlPath === "/highlights") {
+    return json(200, detectHighlightsFromOrch(ctx.orch, ctx.params));
   }
 
   if (method === "GET" && urlPath === "/audit") {

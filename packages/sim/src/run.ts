@@ -11,10 +11,16 @@ import {
   validateBundle,
   inspectBundleSummary,
   renderDailyBrief,
+  detectHighlights,
+  detectHighlightsFromOrch,
+  countHighlightsByKind,
   type ExperimentParams,
   type RunMetrics,
   type DailyMetricSample,
   type GssBundleV1,
+  type NarrativeHighlight,
+  type HighlightKind,
+  type HighlightInput,
   parseParamPairs,
   mergeParams,
 } from "@gss/experiment";
@@ -35,6 +41,7 @@ export interface RunOptions {
   logPath?: string;
   metricsOut?: string;
   briefOut?: string;
+  highlightsOut?: string;
   storehouseFood?: number;
   woodsFood?: number;
   initialGranary?: number;
@@ -66,6 +73,8 @@ export interface RunSummary {
   logPath?: string;
   metricsPath?: string;
   briefPath?: string;
+  highlightsPath?: string;
+  highlightCount?: number;
   agentId: string;
   placeId: string;
 }
@@ -202,6 +211,7 @@ function finalize(
     logPath?: string;
     metricsOut?: string;
     briefOut?: string;
+    highlightsOut?: string;
   },
   lines: string[],
   params: ExperimentParams,
@@ -253,6 +263,17 @@ function finalize(
     fs.writeFileSync(briefPath, renderDailyBrief(orch, params));
   }
 
+  const highlights: NarrativeHighlight[] = detectHighlightsFromOrch(
+    orch,
+    params,
+  );
+  let highlightsPath: string | undefined;
+  if (opts.highlightsOut) {
+    highlightsPath = path.resolve(opts.highlightsOut);
+    fs.mkdirSync(path.dirname(highlightsPath), { recursive: true });
+    fs.writeFileSync(highlightsPath, JSON.stringify(highlights, null, 2));
+  }
+
   let logPath = opts.logPath;
   const summary: RunSummary = {
     exitCode: 0,
@@ -274,6 +295,8 @@ function finalize(
     logPath,
     metricsPath,
     briefPath,
+    highlightsPath,
+    highlightCount: highlights.length,
     agentId: agentIds[0]!,
     placeId: places[agentIds[0]!]!,
   };
@@ -446,5 +469,16 @@ export {
   validateBundle,
   createBundle,
   renderDailyBrief,
+  detectHighlights,
+  detectHighlightsFromOrch,
+  countHighlightsByKind,
 };
-export type { ExperimentParams, RunMetrics, GssBundleV1, DailyMetricSample };
+export type {
+  ExperimentParams,
+  RunMetrics,
+  GssBundleV1,
+  DailyMetricSample,
+  NarrativeHighlight,
+  HighlightKind,
+  HighlightInput,
+};
