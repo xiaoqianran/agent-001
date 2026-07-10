@@ -203,9 +203,4 @@ interface NarrativeHighlight {
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-010 候选（择一或合并为小 scope）：**
-
-1. **Observer 写路径最小鉴权**（`OBSERVER_TOKEN` / 默认关 inject）  
-2. **实验包 v2**：分叉 fork + A/B bundle 对比报告 HTML/MD  
-3. **eval 夹具深化**：承诺续跑（#1）或谣言-信念（#4）缩小场景  
-4. **explain(eventId)** 证据链最小版（评估 #7）  
+**GOAL-010（已成文）：** [GOAL-010-explain-evidence-chain.md](./GOAL-010-explain-evidence-chain.md) — 因果解释 explain + 最小证据链（评估 #7）。  
