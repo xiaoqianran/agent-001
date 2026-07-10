@@ -36,4 +36,14 @@ export interface LocalObservation {
    * Required so cognition can gate give vs take without World write access.
    */
   selfInventory: Record<string, number>;
+  /**
+   * When institution.transparency is on: public granary ledger summary.
+   */
+  publicLedger?: {
+    goodId: string;
+    stock: number;
+    totalContributed: number;
+    totalWithdrawn: number;
+    contributors: Record<string, number>;
+  };
 }
