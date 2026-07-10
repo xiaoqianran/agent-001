@@ -47,12 +47,23 @@ export interface SocialSlice {
   }>;
   pendingPromisesAsPromisor: PromiseRecord[];
   pendingPromisesAsPromisee: PromiseRecord[];
+  /** GOAL-003: read-only active norms (optionally place-filtered by runtime) */
+  activeNorms: Array<{
+    id: string;
+    kind: string;
+    origin: string;
+    placeId: string;
+    actionType: string;
+    strength: number;
+  }>;
 }
 
 export interface SocialGraphSnapshot {
   edges: RelationEdge[];
   promises: PromiseRecord[];
   nextPromiseId: number;
+  /** GOAL-003 */
+  norms?: import("./norms.js").NormSnapshot;
 }
 
 export type SocialEvent =

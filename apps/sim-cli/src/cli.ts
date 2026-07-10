@@ -13,13 +13,13 @@ function usage(): never {
 Usage:
   pnpm sim run --scenario solo-cabin --days 7 --seed 42
   pnpm sim run --scenario dyad-cabin --days 5 --seed 42
-  pnpm sim run --scenario dyad-cabin --days 2 --seed 42 --checkpoint ./ckpts/d.json
-  pnpm sim resume --checkpoint ./ckpts/d.json --days 3
-  pnpm sim compare-seeds --scenario dyad-cabin --seed 42 --days 5
-  pnpm sim fingerprint --scenario dyad-cabin --seed 42 --days 2
+  pnpm sim run --scenario trio-cabin --days 5 --seed 42
+  pnpm sim run --scenario trio-cabin --days 2 --seed 42 --checkpoint ./ckpts/t.json
+  pnpm sim resume --checkpoint ./ckpts/t.json --days 3
+  pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 
 Options:
-  --scenario <id>     solo-cabin | dyad-cabin
+  --scenario <id>     solo-cabin | dyad-cabin | trio-cabin
   --days <n>
   --seed <value>
   --checkpoint <path>
@@ -78,7 +78,10 @@ async function main() {
   if (cmd === "fingerprint") {
     const days = Number(flags.days ?? "1");
     const seed = flags.seed ?? "42";
-    const scenario = (flags.scenario ?? "solo-cabin") as "solo-cabin" | "dyad-cabin";
+    const scenario = (flags.scenario ?? "solo-cabin") as
+      | "solo-cabin"
+      | "dyad-cabin"
+      | "trio-cabin";
     const orch = createSimulation({ seed, scenario });
     await orch.runDays(days);
     const agents = orch.getSimulationState().agents;
@@ -97,7 +100,10 @@ async function main() {
   if (cmd === "compare-seeds") {
     const days = Number(flags.days ?? "2");
     const seed = flags.seed ?? "42";
-    const scenario = (flags.scenario ?? "solo-cabin") as "solo-cabin" | "dyad-cabin";
+    const scenario = (flags.scenario ?? "solo-cabin") as
+      | "solo-cabin"
+      | "dyad-cabin"
+      | "trio-cabin";
     const a = createSimulation({ seed, scenario });
     const b = createSimulation({ seed, scenario });
     await a.runDays(days);

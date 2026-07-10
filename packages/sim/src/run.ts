@@ -26,6 +26,7 @@ export interface RunSummary {
   fingerprint: ReturnType<typeof computeFingerprint>;
   promiseCount: number;
   memoryCount: number;
+  emergentNormCount: number;
   checkpointPath?: string;
   logPath?: string;
   agentId: string;
@@ -34,7 +35,11 @@ export interface RunSummary {
 
 export async function runSimulation(opts: RunOptions): Promise<RunSummary> {
   const scenario = opts.scenario as ScenarioId;
-  if (scenario !== "solo-cabin" && scenario !== "dyad-cabin") {
+  if (
+    scenario !== "solo-cabin" &&
+    scenario !== "dyad-cabin" &&
+    scenario !== "trio-cabin"
+  ) {
     throw new Error(`unsupported scenario: ${opts.scenario}`);
   }
   const orch = createSimulation({ seed: opts.seed, scenario });
@@ -108,6 +113,7 @@ function finalize(
     fingerprint,
     promiseCount: orch.getSocial().listPromises().length,
     memoryCount: orch.getMemory().count(),
+    emergentNormCount: orch.getSocial().emergentNormCount(),
     checkpointPath,
     logPath,
     agentId: agentIds[0]!,
@@ -138,7 +144,17 @@ export async function resumeSimulation(opts: {
           new RuleCognitiveEngine({
             roleHint: id === "agent-alice" ? "promisor" : "promisee",
           })
-      : undefined;
+      : bundle.scenarioId === "trio-cabin"
+        ? (id: string) =>
+            new RuleCognitiveEngine({
+              roleHint:
+                id === "agent-alice"
+                  ? "cooperative"
+                  : id === "agent-bob"
+                    ? "grabber"
+                    : "neutral",
+            })
+        : undefined;
 
   const orch = TickOrchestrator.fromCheckpoint(bundle, undefined, factory);
   const startTick = orch.getClock().tick;

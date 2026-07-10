@@ -14,8 +14,17 @@ export interface CognitiveEngineOptions {
   llm?: LlmPort;
   /** When true, cognitive tick throws (for fault isolation tests) */
   forceThrow?: boolean;
-  /** Role bias for dyad scenarios: promisor tends to promise early */
-  roleHint?: "promisor" | "promisee" | "neutral";
+  /**
+   * Role bias:
+   * - promisor/promisee: dyad
+   * - cooperative / grabber / neutral: trio scarce
+   */
+  roleHint?:
+    | "promisor"
+    | "promisee"
+    | "neutral"
+    | "cooperative"
+    | "grabber";
 }
 
 /**
@@ -25,7 +34,7 @@ export interface CognitiveEngineOptions {
 export class RuleCognitiveEngine {
   private readonly llm: LlmPort;
   private forceThrow: boolean;
-  private roleHint: "promisor" | "promisee" | "neutral";
+  private roleHint: NonNullable<CognitiveEngineOptions["roleHint"]>;
 
   constructor(opts: CognitiveEngineOptions = {}) {
     this.llm = opts.llm ?? new StubLlm();
@@ -248,6 +257,45 @@ export class RuleCognitiveEngine {
       add({ verb: "work", mutexSlots: ["manual"] }, 0.55);
     }
 
+    // Trio role biases (scarce world)
+    if (this.roleHint === "grabber" && foodHere) {
+      add(
+        {
+          verb: "take",
+          itemKind: "food",
+          quantity: 1,
+          mutexSlots: ["manual"],
+        },
+        0.93,
+      );
+    }
+    if (this.roleHint === "cooperative" && othersHere.length > 0) {
+      const haveFood = (inv.food ?? 0) >= 1;
+      if (haveFood) {
+        add(
+          {
+            verb: "give",
+            targetAgentId: othersHere[0]!.id,
+            itemKind: "food",
+            quantity: 1,
+            mutexSlots: ["manual"],
+          },
+          0.72,
+        );
+      } else if (foodHere) {
+        add(
+          {
+            verb: "take",
+            itemKind: "food",
+            quantity: 1,
+            mutexSlots: ["manual"],
+          },
+          0.8,
+        );
+      }
+      add({ verb: "work", mutexSlots: ["manual"] }, 0.62);
+    }
+
     for (const adj of obs.place.adjacent) {
       add(
         {
@@ -260,6 +308,24 @@ export class RuleCognitiveEngine {
     }
 
     add({ verb: "observe", mutexSlots: ["observe"] }, 0.15);
+
+    // GOAL-003: micro-weight options matching active descriptive norms at this place
+    const norms = social?.activeNorms ?? [];
+    if (norms.length) {
+      attended.push({
+        kind: "norm.active",
+        salience: norms[0]!.strength,
+        ref: norms[0]!.id,
+      });
+    }
+    for (const n of norms) {
+      if (n.placeId !== obs.place.id) continue;
+      for (const o of options) {
+        if (o.action.verb === n.actionType) {
+          o.score += 0.08 * n.strength;
+        }
+      }
+    }
 
     // Boost options that align with retrieved promise memories (never promote invalid give)
     for (const m of memories) {

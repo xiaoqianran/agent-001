@@ -29,6 +29,10 @@ export function computeFingerprint(
       ? hash32(memory.digest()).toString(16)
       : undefined,
     socialDigest: social ? hash32(social.digest()).toString(16) : undefined,
+    normDigest: social
+      ? hash32(social.norms.digest()).toString(16)
+      : undefined,
+    emergentNormCount: social ? social.emergentNormCount() : undefined,
   };
 }
 
@@ -53,6 +57,8 @@ function stable(fp: AuthorityFingerprint): unknown {
     ),
     memoryDigest: fp.memoryDigest ?? "",
     socialDigest: fp.socialDigest ?? "",
+    normDigest: fp.normDigest ?? "",
+    emergentNormCount: fp.emergentNormCount ?? 0,
   };
 }
 

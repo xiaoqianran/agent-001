@@ -76,6 +76,15 @@ export interface SocialContextLite {
     from: AgentId;
     content: string;
   }>;
+  /** GOAL-003 read-only norms */
+  activeNorms?: Array<{
+    id: string;
+    kind: string;
+    origin: string;
+    placeId: string;
+    actionType: string;
+    strength: number;
+  }>;
 }
 
 export interface RetrievedMemoryLite {

@@ -1,4 +1,4 @@
-import type { AgentId, Tick } from "@gss/contracts";
+import type { ActionType, AgentId, PlaceId, Tick } from "@gss/contracts";
 import type {
   PromiseRecord,
   RelationEdge,
@@ -8,6 +8,12 @@ import type {
   SocialSlice,
   RelationDimensions,
 } from "./types.js";
+import {
+  DEFAULT_NORM_THRESHOLDS,
+  NormTracker,
+  type Norm,
+  type NormThresholds,
+} from "./norms.js";
 
 function edgeKey(a: AgentId, b: AgentId): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`;
@@ -18,12 +24,18 @@ function defaultDims(): RelationDimensions {
 }
 
 /**
- * Minimal social graph + promises. Event-reduced only; cognition reads SocialSlice.
+ * Minimal social graph + promises + descriptive norms.
+ * Event-reduced only; cognition reads SocialSlice (never writes).
  */
 export class SocialGraph {
   private edges = new Map<string, RelationEdge>();
   private promises = new Map<string, PromiseRecord>();
   private nextPromiseId = 1;
+  readonly norms: NormTracker;
+
+  constructor(normThresholds: NormThresholds = DEFAULT_NORM_THRESHOLDS) {
+    this.norms = new NormTracker(normThresholds);
+  }
 
   ensureEdge(a: AgentId, b: AgentId, type: RelationType = "acquaintance"): RelationEdge {
     const k = edgeKey(a, b);
@@ -153,7 +165,7 @@ export class SocialGraph {
     return { memoryHints: hints };
   }
 
-  getSlice(subject: AgentId): SocialSlice {
+  getSlice(subject: AgentId, placeId?: PlaceId): SocialSlice {
     const relations: SocialSlice["relations"] = [];
     for (const e of this.edges.values()) {
       if (e.a === subject || e.b === subject) {
@@ -166,6 +178,14 @@ export class SocialGraph {
       }
     }
     const all = [...this.promises.values()];
+    const active = this.norms.activeNorms(placeId).map((n) => ({
+      id: n.id,
+      kind: n.kind,
+      origin: n.origin,
+      placeId: n.placeId,
+      actionType: n.actionType,
+      strength: n.strength,
+    }));
     return {
       subject,
       relations,
@@ -175,7 +195,22 @@ export class SocialGraph {
       pendingPromisesAsPromisee: all.filter(
         (p) => p.to === subject && p.status === "pending",
       ),
+      activeNorms: active,
     };
+  }
+
+  /** After world action.applied — record place/verb for norm emergence */
+  recordAppliedAction(
+    placeId: PlaceId,
+    actionType: ActionType,
+    actor: AgentId,
+    tick: Tick,
+  ): Norm | undefined {
+    return this.norms.recordApplied({ tick, actor, placeId, actionType });
+  }
+
+  emergentNormCount(): number {
+    return this.norms.emergentNormCount();
   }
 
   listPromises(): PromiseRecord[] {
@@ -202,7 +237,7 @@ export class SocialGraph {
     const proms = [...this.promises.values()]
       .map((p) => `${p.id}:${p.from}->${p.to}:${p.status}:${p.content}`)
       .sort();
-    return edges.join("|") + "##" + proms.join("|");
+    return edges.join("|") + "##" + proms.join("|") + "##N:" + this.norms.digest();
   }
 
   snapshot(): SocialGraphSnapshot {
@@ -210,6 +245,7 @@ export class SocialGraph {
       edges: [...this.edges.values()].map((e) => structuredClone(e)),
       promises: [...this.promises.values()].map((p) => structuredClone(p)),
       nextPromiseId: this.nextPromiseId,
+      norms: this.norms.snapshot(),
     };
   }
 
@@ -223,10 +259,14 @@ export class SocialGraph {
       this.promises.set(p.id, structuredClone(p));
     }
     this.nextPromiseId = snap.nextPromiseId;
+    if (snap.norms) {
+      this.norms.loadSnapshot(snap.norms);
+    }
   }
 
   static fromSnapshot(snap: SocialGraphSnapshot): SocialGraph {
-    const g = new SocialGraph();
+    const thresholds = snap.norms?.thresholds ?? DEFAULT_NORM_THRESHOLDS;
+    const g = new SocialGraph(thresholds);
     g.loadSnapshot(snap);
     return g;
   }

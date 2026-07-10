@@ -31,4 +31,7 @@ export interface AuthorityFingerprint {
   /** optional digests for multi-agent social runs */
   memoryDigest?: string;
   socialDigest?: string;
+  /** GOAL-003 */
+  normDigest?: string;
+  emergentNormCount?: number;
 }

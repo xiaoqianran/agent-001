@@ -183,7 +183,7 @@ export class TickOrchestrator {
         const observation = this.world.observe(agentId, this.state.clock.tick);
         agent.placeId = observation.place.id;
 
-        const slice = this.social.getSlice(agentId);
+        const slice = this.social.getSlice(agentId, observation.place.id);
         const social = {
           relations: slice.relations.map((r) => ({
             other: r.other,
@@ -205,6 +205,7 @@ export class TickOrchestrator {
             from: p.from,
             content: p.content,
           })),
+          activeNorms: slice.activeNorms,
         };
 
         const memHits = this.memory.retrieve({
@@ -292,6 +293,26 @@ export class TickOrchestrator {
           const body = this.world.getAgent(proposal.actor);
           if (body) {
             this.state.agents[proposal.actor].placeId = body.placeId;
+          }
+        }
+        // descriptive norm counters (place after apply so move counts destination)
+        const bodyNow = this.world.getAgent(proposal.actor);
+        if (bodyNow) {
+          const spawned = this.social.recordAppliedAction(
+            bodyNow.placeId,
+            proposal.structured.verb,
+            proposal.actor,
+            this.state.clock.tick,
+          );
+          if (spawned) {
+            this.memory.encode({
+              owner: proposal.actor,
+              kind: "social",
+              summary: `noticed emerging custom: ${spawned.actionType} at ${spawned.placeId}`,
+              tick: this.state.clock.tick,
+              tags: ["norm", "emergent"],
+              importance: 0.6,
+            });
           }
         }
         // episodic encode for actor
