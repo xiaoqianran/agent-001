@@ -181,4 +181,4 @@ interface ControlRoomService {
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-007：** 简单 Web 观测页（只读地图 + 时间线）或 **制度文本可被 agent 提议修改** 的迷你立法环；或规模兴趣管理（降频边缘 agent）成本门禁硬化。  
+**GOAL-007（已成文）：** [GOAL-007-observer-http.md](./GOAL-007-observer-http.md) — 只读观测 HTTP + 极简静态页 + LOD 降频。  

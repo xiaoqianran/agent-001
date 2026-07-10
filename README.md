@@ -63,7 +63,8 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [GOAL-003 规格](docs/goals/GOAL-003-norms-scarce-trio.md)（已完成：规范涌现 + 三人稀缺）
 - [GOAL-004 规格](docs/goals/GOAL-004-experiment-params-metrics.md)（已完成：实验参数 + 指标对照）
 - [GOAL-005 规格](docs/goals/GOAL-005-public-goods-bundle.md)（已完成：公共品 + 实验包）
-- [GOAL-006 规格](docs/goals/GOAL-006-institution-control-api.md)（制度旋钮 + Control API）
+- [GOAL-006 规格](docs/goals/GOAL-006-institution-control-api.md)（已完成：制度旋钮 + Control API）
+- [GOAL-007 规格](docs/goals/GOAL-007-observer-http.md)（下一步：只读观测 HTTP + LOD）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)
