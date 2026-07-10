@@ -4,3 +4,4 @@ export * from "./compare.js";
 export * from "./bundle.js";
 export * from "./institution.js";
 export * from "./brief.js";
+export * from "./highlights.js";
