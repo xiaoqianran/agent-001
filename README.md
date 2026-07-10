@@ -64,13 +64,22 @@ pnpm sim compare-seeds --scenario trio-cabin --seed 42 --days 5
 - [GOAL-004 规格](docs/goals/GOAL-004-experiment-params-metrics.md)（已完成：实验参数 + 指标对照）
 - [GOAL-005 规格](docs/goals/GOAL-005-public-goods-bundle.md)（已完成：公共品 + 实验包）
 - [GOAL-006 规格](docs/goals/GOAL-006-institution-control-api.md)（已完成：制度旋钮 + Control API）
-- [GOAL-007 规格](docs/goals/GOAL-007-observer-http.md)（只读观测 HTTP + LOD）
+- [GOAL-007 规格](docs/goals/GOAL-007-observer-http.md)（已完成：只读观测 HTTP + LOD）
+- [GOAL-008 规格](docs/goals/GOAL-008-mini-legislature.md)（下一步：迷你立法环 + 简报）
 - [Runtime 工程说明](docs/engineering/runtime-foundation.md)
 - [记忆与小群体](docs/engineering/memory-social-dyad.md)
 - [规范与三人稀缺](docs/engineering/norms-scarce-trio.md)
 - [实验参数与指标](docs/engineering/experiment-params-metrics.md)
 - [公共品与实验包](docs/engineering/public-goods-bundle.md)
 - [制度旋钮与 Control API](docs/engineering/institution-control-api.md)
+- [只读观测与 LOD](docs/engineering/observer-http.md)
+
+### 观测页
+
+```bash
+pnpm observer --scenario commons-cabin --seed 42 --days 1 --port 8787
+# 浏览器打开 http://127.0.0.1:8787/
+```
 
 ## 核心目标
 

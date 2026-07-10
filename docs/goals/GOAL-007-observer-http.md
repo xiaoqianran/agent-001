@@ -142,4 +142,4 @@
 
 ## 建议再下一条（本 goal 完成后）
 
-**GOAL-008：** Agent 提议修改制度参数的迷你「立法」环（提案→投票→生效）；或 **日级自动社会简报**（规则模板 + 可选 LLM）。  
+**GOAL-008（已成文）：** [GOAL-008-mini-legislature.md](./GOAL-008-mini-legislature.md) — 提案→投票→生效 + 社会简报。  
